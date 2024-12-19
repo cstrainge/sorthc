@@ -46,11 +46,14 @@ llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS})
 
 
 set(SRC_DIR "src")
-file(GLOB SRCS "${SRC_DIR}/*.cpp")
+file(GLOB SRCS "${SRC_DIR}/*.cpp"
+               "${SRC_DIR}/source/*.cpp")
+
 
 add_executable(${PROJECT_NAME} ${SRCS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE "${SRC_DIR}")
+target_include_directories(${PROJECT_NAME} PRIVATE "${SRC_DIR}/source")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${DIST_DIR})
 
