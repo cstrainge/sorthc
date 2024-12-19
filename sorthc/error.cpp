@@ -7,7 +7,7 @@ namespace sorthc
 {
 
 
-    void throw_error(const Location& location, const std::string& message)
+    void throw_error(const source::Location& location, const std::string& message)
     {
         std::ostringstream stream;
 

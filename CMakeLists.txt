@@ -45,22 +45,61 @@ llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_COMPONENTS})
 
 
 
-set(SRC_DIR "src")
-file(GLOB SRCS "${SRC_DIR}/*.cpp"
-               "${SRC_DIR}/source/*.cpp")
+# Name for the sorth-runtime library.
+set(SORTH_RUNTIME_NAME "sorth-runtime")
 
 
-add_executable(${PROJECT_NAME} ${SRCS})
 
-target_include_directories(${PROJECT_NAME} PRIVATE "${SRC_DIR}")
-target_include_directories(${PROJECT_NAME} PRIVATE "${SRC_DIR}/source")
+# Add the compiler target executable.
+set(SORTH_C_SRC_DIR "${CMAKE_SOURCE_DIR}/sorthc")
 
+message(STATUS "Sorth C source directory: ${SORTH_C_SRC_DIR}")
+message(STATUS "Sorth C source directory: ${SORTH_C_SRC_DIR}/source")
+message(STATUS "Sorth C source directory: ${SORTH_C_SRC_DIR}/compilation")
+message(STATUS "Sorth C source directory: ${SORTH_C_SRC_DIR}/compilation/byte-code")
+
+file(GLOB SORTH_C_SRCS "${SORTH_C_SRC_DIR}/*.cpp"
+                       "${SORTH_C_SRC_DIR}/source/*.cpp"
+                       "${SORTH_C_SRC_DIR}/compilation/*.cpp"
+                       "${SORTH_C_SRC_DIR}/compilation/byte-code/*.cpp")
+
+
+add_executable(${PROJECT_NAME} ${SORTH_C_SRCS})
+
+target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_C_SRC_DIR}/"
+                                                   "${SORTH_C_SRC_DIR}/source/"
+                                                   "${SORTH_C_SRC_DIR}/compilation/"
+                                                   "${SORTH_C_SRC_DIR}/compilation/byte-code/")
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${DIST_DIR})
+
+
+
+# Now add the sorth-runtime static library.
+set(SORTH_RUNTIME_DIR "${CMAKE_SOURCE_DIR}/sorth-runtime")
+file(GLOB SORTH_RUNTIME_SRCS "${SORTH_RUNTIME_DIR}/*.cpp")
+
+add_library(${SORTH_RUNTIME_NAME} STATIC "${SORTH_RUNTIME_SRCS}")
+
+# The static library should be output to the dist directory, so that the compiler can find it.
+set_target_properties(${SORTH_RUNTIME_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${DIST_DIR}"
+                                                       ARCHIVE_OUTPUT_DIRECTORY "${DIST_DIR}"
+                                                       LIBRARY_OUTPUT_DIRECTORY "${DIST_DIR}")
+
+
+
+# Make sure that both targets can find their header files.
+target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_RUNTIME_SRCS}/")
+target_include_directories(${SORTH_RUNTIME_NAME} PRIVATE "${SORTH_RUNTIME_DIR}/")
 
 
 
 # Bring in our required LLVM libraries.
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LIBS})
+
+
+
+# Make sure the compiler target depends on the sorth-runtime target.
+add_dependencies(${PROJECT_NAME} ${SORTH_RUNTIME_NAME})
 
 
 
@@ -86,8 +125,9 @@ add_custom_target(copy_stdlib ALL
 
 
 
-# Make sure that the compiler target depends on the copy_stdlib target.
+# Make sure that the compiler target and the run-time depend on the copy_stdlib target.
 add_dependencies(${PROJECT_NAME} copy_stdlib)
+add_dependencies(${SORTH_RUNTIME_NAME} copy_stdlib)
 
 
 
