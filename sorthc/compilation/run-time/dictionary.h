@@ -3,11 +3,11 @@
 
 
 
-namespace sorthc::compilation::byte_code
+namespace sorthc::compilation::run_time
 {
 
 
-    class Script
+    class Dictionary
     {
         //
     };

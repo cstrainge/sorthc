@@ -2,6 +2,102 @@
 #include "sorthc.h"
 
 
+namespace
+{
+
+
+    // Get the directory where the executable is located.  This is used to find the standard library
+    // in the case the user hasn't specified another location for it.
+    std::filesystem::path get_executable_directory()
+    {
+        std::filesystem::path base_path;
+
+        // Refer to OS specific means to get the current executable's path.
+        #if defined(__APPLE__)
+
+            uint32_t buffer_size = 0;
+
+            assert(_NSGetExecutablePath(nullptr, &buffer_size) == -1);
+
+            std::vector<char> buffer((size_t)buffer_size);
+
+            assert(_NSGetExecutablePath(&buffer[0], &buffer_size) == 0);
+
+            base_path = std::filesystem::canonical(&buffer[0]).remove_filename();
+
+        #elif defined(__linux__)
+
+            char buffer [PATH_MAX + 1];
+            ssize_t count = 0;
+
+            memset(buffer, 0, PATH_MAX + 1);
+
+            count = readlink("/proc/self/exe", buffer, PATH_MAX);
+
+            if (count < 0)
+            {
+                throw std::runtime_error("Executable path could not be read, " +
+                                         std::string(strerror(errno)) + ".");
+            }
+
+            base_path = std::filesystem::canonical(buffer).remove_filename();
+
+        #elif defined(IS_WINDOWS)
+
+            char buffer [ MAX_PATH + 1];
+
+            memset(buffer, 0, MAX_PATH + 1);
+
+            GetModuleFileNameA(nullptr, buffer, MAX_PATH);
+
+            if (GetLastError() != ERROR_SUCCESS)
+            {
+                char message_buffer[4096];
+                memset(message_buffer, 0, 4096);
+                size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                                             FORMAT_MESSAGE_FROM_SYSTEM |
+                                             FORMAT_MESSAGE_IGNORE_INSERTS,
+                                             nullptr,
+                                             GetLastError(),
+                                             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                             message_buffer,
+                                             0,
+                                             NULL);
+                std::stringstream stream;
+
+                stream << "Could not get the executable directory: " << message_buffer;
+
+                throw std::runtime_error(stream.str());
+            }
+
+            base_path = std::filesystem::canonical(buffer).remove_filename();
+
+        #else
+
+            throw std::runtime_error("get_executable_directory is unimplemented on this platform.");
+
+        #endif
+
+        return base_path;
+    }
+
+
+    // Get the directory where the standard library is located.  This can either be the directory
+    // that the executable is in, or it can be specified by the SORTH_LIB environment variable.
+    std::filesystem::path get_std_lib_directory()
+    {
+        auto env_path = std::getenv("SORTH_LIB");
+
+        if (env_path != nullptr)
+        {
+            return std::filesystem::canonical(env_path);
+        }
+
+        return get_executable_directory();
+    }
+}
+
+
 
 int main(int argc, char* argv[])
 {
@@ -9,7 +105,14 @@ int main(int argc, char* argv[])
 
     try
     {
-        //
+        auto compiler = sorthc::compilation::Compiler(get_std_lib_directory());
+
+        if (argc != 3)
+        {
+            throw std::runtime_error("Usage: sorthc <source-file> <output-file>");
+        }
+
+        compiler.compile(argv[1], argv[2]);
     }
     catch (const std::exception& error)
     {

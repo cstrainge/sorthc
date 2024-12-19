@@ -17,4 +17,12 @@ namespace sorthc
     }
 
 
+
+    void throw_error(const compilation::run_time::CompilerRuntime& runtime,
+                     const::std::string& message)
+    {
+        throw_error(runtime.get_location(), message);
+    }
+
+
 }

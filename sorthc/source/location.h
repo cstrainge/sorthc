@@ -40,6 +40,9 @@ namespace sorthc::source
     };
 
 
+    // Get a location for the current position in the C++ source code.
+    #define LOCATION_HERE sorthc::source::Location(__FILE__, __LINE__, 1)
+
 
     std::ostream& operator <<(std::ostream& stream, const Location& location);
 
