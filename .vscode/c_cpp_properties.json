@@ -1,0 +1,35 @@
+
+{
+    "version": 4,
+
+    "configurations":
+    [
+        {
+            "name": "Win32",
+
+            "windowsSdkVersion": "10.0.19041.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "${default}",
+
+            "includePath":
+            [
+                "${workspaceFolder}/sorthc/**",
+                "${workspaceFolder}/sorthc/source/**",
+                "${workspaceFolder}/sorthc/compilation/**",
+                "${workspaceFolder}/sorthc/compilation/byte-code/**",
+                "${workspaceFolder}/sorthc/compilation/run-time/**",
+
+                "${workspaceFolder}/sorth-runtime/**"
+            ],
+
+            "defines":
+            [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ]
+        }
+    ]
+}
