@@ -20,7 +20,17 @@ namespace sorthc::compilation::run_time
         // compile the standard library.
         init_dictionary();
 
-        compile_script("std.f");
+        // Note that we only load a subset of the standard library here, the rest of it is loaded
+        // when the compilation phase is run.
+        //
+        // The core words are shared by the compiler's internal runtime and the run-time that the
+        // compiled code ultimately runs in.
+        auto& std_lib = compile_script("std/core-words.f");
+
+        // JIT compile the standard library's words and top level code, the words in the script will
+        // automaticaly be added to the run-time's dictionary.
+        auto top_level = byte_code::get_jit_engine().jit_compile(*this, std_lib);
+        top_level(*this);
     }
 
 
@@ -43,7 +53,17 @@ namespace sorthc::compilation::run_time
     }
 
 
-    void CompilerRuntime::compile_script(const std::filesystem::path& path)
+    // Drop the last search path from the run-time's search path collection.
+    void CompilerRuntime::drop_search_path()
+    {
+        throw_error_if(search_paths.empty(), *this, "No search paths to drop.");
+
+        search_paths.pop_back();
+    }
+
+
+    // Compile a script to byte-code and add it to the cache.
+    byte_code::Script& CompilerRuntime::compile_script(const std::filesystem::path& path)
     {
         // First check if the script is already in the cache, if it's already there we con't need to
         // do anything.  Note that we still do a full find_file on it to make sure the path is
@@ -54,8 +74,63 @@ namespace sorthc::compilation::run_time
 
         if (iter != script_cache.end())
         {
-            return;
+            return iter->second;
         }
+
+        // Get the base of the file's path so we can use it to search for included files by that
+        // script.
+        auto base_path = full_path;
+        base_path.remove_filename();
+
+        // Append the path to the search path temporarily.
+        auto search_path_manager = SearchPathManager(*this, base_path);
+
+        // Read the source file into a buffer and tokenize it.
+        auto buffer = source::SourceBuffer(full_path);
+        auto tokens = source::tokenize_source(buffer);
+
+        // Create a new compile context and compile the tokens into byte-code.
+        auto compile_context_manager = CompileContextManager(*this, std::move(tokens));
+
+        get_compile_context().compile_token_list();
+
+        // Create a new script object and add it to the cache.
+        auto construction = get_compile_context().drop_construction();
+        auto& words = get_compile_context().get_words();
+        auto code = std::move(construction.take_code());
+
+        auto script = byte_code::Script(std::move(full_path), words, std::move(code));
+
+        // Cache the script, and return the reference to the cached one.
+        script_cache.insert(std::make_pair(script.get_script_path(), script));
+
+        return script_cache[script.get_script_path()];
+    }
+
+
+    // Construct a new compilation context for the given token list representing a script.
+    void CompilerRuntime::create_compile_context(source::TokenList&& tokens)
+    {
+        compile_contexts.push(new byte_code::Context(*this, std::move(tokens)));
+    }
+
+
+    // Drop the current compile context after finishing the compilation of a script file.
+    void CompilerRuntime::drop_compile_context()
+    {
+        throw_error_if(compile_contexts.empty(), *this, "No compile context to drop.");
+
+        delete compile_contexts.top();
+        compile_contexts.pop();
+    }
+
+
+    // Get the current compile context.
+    byte_code::Context& CompilerRuntime::get_compile_context()
+    {
+        throw_error_if(compile_contexts.empty(), *this, "No compile context to access.");
+
+        return *compile_contexts.top();
     }
 
 

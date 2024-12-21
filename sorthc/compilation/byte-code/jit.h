@@ -15,8 +15,33 @@ namespace sorthc::compilation::byte_code
     // optimization.
     class Jit
     {
-        //
+        private:
+            // llvm stuff...
+
+        public:
+            Jit();
+            Jit(const Jit& jit) = delete;
+            Jit(Jit&& jit) = delete;
+            ~Jit() = default;
+
+        public:
+            Jit& operator =(const Jit& jit) = delete;
+            Jit& operator =(Jit&& jit) = delete;
+
+        public:
+            // JIT compile a word construction into native code and register it for running within
+            // the compiler's runtime.
+            void jit_compile(run_time::CompilerRuntime& runtime, const Construction& construction);
+
+            // JIT compile a script into native code for running within the compiler's runtime.
+            // Register all of the scripts non-immediate words for execution for other immediate
+            // words.
+            run_time::WordHandler jit_compile(run_time::CompilerRuntime& runtime,
+                                              const Script& script);
     };
+
+
+    Jit& get_jit_engine();
 
 
 }

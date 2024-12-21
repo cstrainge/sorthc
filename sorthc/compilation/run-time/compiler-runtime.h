@@ -128,10 +128,24 @@ namespace sorthc::compilation::run_time
             // Append a search path to the run-time's search path collection.
             void append_search_path(const std::filesystem::path& path);
 
+            // Drop the last search path from the run-time's search path collection.
+            void drop_search_path();
+
         public:
             // Find and byte-code compile a script file.  Once compiled the script is added to the
             // cache.  If the script is already in the cache, nothing is done.
-            void compile_script(const std::filesystem::path& path);
+            byte_code::Script& compile_script(const std::filesystem::path& path);
+
+        public:
+            // Construct a new compilation context for the given token list representing a script.
+            void create_compile_context(source::TokenList&& tokens);
+
+            // Drop the current compile context after finishing the compilation of a script file.
+            void drop_compile_context();
+
+
+            // Get the current compile context.
+            byte_code::Context& get_compile_context();
 
         public:
             // Add a word to the run-time dictionary.
@@ -162,37 +176,71 @@ namespace sorthc::compilation::run_time
                           WordContextManagement context_management);
 
         public:
+            // Find a word in the dictionary.
             const std::tuple<bool, Word> find(const std::string& word_name) const noexcept;
+
+            // Find a word handler in the handler list.
             const std::tuple<bool, WordHandlerInfo> find(size_t handler_index) const noexcept;
 
         public:
+            // Define a new variable in the run-time.
             void define_variable(const std::string& name) noexcept;
+
+            // Define a new constant in the run-time.
             void define_constant(const std::string& name, const Value& value) noexcept;
 
+
+            // Read from a variable from the run-time.
             Value read_variable(size_t index);
+
+            // Write to a variable in the run-time.
             void write_variable(size_t index, Value value);
 
         public:
+            // Push a value onto the data stack.
             void push(const Value& value) noexcept;
 
+
+            // Pop a value from the data stack.
             Value pop();
+
+            // Pop a value from the data stack and convert it to an integer.
             int64_t pop_as_integer();
+
+            // Pop a value from the data stack and convert it to a size_t.
             size_t pop_as_size();
+
+            // Pop a value from the data stack and convert it to a double.
             double pop_as_float();
+
+            // Pop a value from the data stack and convert it to a boolean.
             bool pop_as_bool();
+
+            // Pop a value from the data stack and convert it to a string.
             std::string pop_as_string();
 
         public:
+            // Try to execute a word by name.
             void execute(const std::string& word);
+
+            // Execute a word by found word information.
             void execute(const Word& word);
+
+            // Execute a word by handler index.
             void execute(size_t word_index);
+
+            // Execute a word by handler information.
             void execute(const WordHandlerInfo& info);
 
         public:
+            // Push a new call stack item onto the call stack.
             void call_stack_push(const WordHandlerInfo& info) noexcept;
+
+            // Push a new call stack item onto the call stack.
             void call_stack_push(const std::string& name,
                                  const source::Location& location) noexcept;
 
+            // Pop a call stack item from the call stack.
             void call_stack_pop();
 
         private:
@@ -265,6 +313,58 @@ namespace sorthc::compilation::run_time
         public:
             CallStackManager& operator =(const CallStackManager& manager) = delete;
             CallStackManager& operator =(CallStackManager&& manager) = delete;
+    };
+
+
+    class SearchPathManager
+    {
+        private:
+            CompilerRuntime& runtime;
+
+        public:
+            SearchPathManager(CompilerRuntime& runtime, const std::filesystem::path& path)
+            : runtime(runtime)
+            {
+                runtime.append_search_path(path);
+            }
+
+            SearchPathManager(const SearchPathManager& manager) = delete;
+            SearchPathManager(SearchPathManager&& manager) = delete;
+
+            ~SearchPathManager()
+            {
+                runtime.drop_search_path();
+            }
+
+        public:
+            SearchPathManager& operator =(const SearchPathManager& manager) = delete;
+            SearchPathManager& operator =(SearchPathManager&& manager) = delete;
+    };
+
+
+    class CompileContextManager
+    {
+        private:
+            CompilerRuntime& runtime;
+
+        public:
+            CompileContextManager(CompilerRuntime& runtime, source::TokenList&& tokens)
+            : runtime(runtime)
+            {
+                runtime.create_compile_context(std::move(tokens));
+            }
+
+            CompileContextManager(const CompileContextManager& manager) = delete;
+            CompileContextManager(CompileContextManager&& manager) = delete;
+
+            ~CompileContextManager()
+            {
+                runtime.drop_compile_context();
+            }
+
+        public:
+            CompileContextManager& operator =(const CompileContextManager& manager) = delete;
+            CompileContextManager& operator =(CompileContextManager&& manager) = delete;
     };
 
 

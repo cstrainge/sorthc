@@ -16,6 +16,13 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    // Get the list of words that have been defined in the script.
+    const ConstructionList& Context::get_words() const noexcept
+    {
+        return words;
+    }
+
+
     // Compile the context into byte-code instructions.
     void Context::compile_token_list()
     {
@@ -34,6 +41,7 @@ namespace sorthc::compilation::byte_code
                                ? runtime.find(token.get_as_word())
                                : std::tuple<bool, Word>(false, {});
 
+        // If we found a word, check to see if it's immediate.  If it is, execute it now.
         if (found)
         {
             if (word.get_context() == WordExecutionContext::compile_time)
@@ -42,8 +50,9 @@ namespace sorthc::compilation::byte_code
             }
             else
             {
-                insert_instruction(Instruction(Instruction::Id::execute,
-                                               word.get_handler_index()));
+                insert_instruction(token.get_location(),
+                                    Instruction::Id::execute,
+                                    word.get_handler_index());
             }
         }
         else
@@ -51,18 +60,21 @@ namespace sorthc::compilation::byte_code
             switch (token.get_type())
             {
                 case source::Token::Type::string:
-                    insert_instruction(Instruction(Instruction::Id::push_constant_value,
-                                                   token.get_text()));
+                    insert_instruction(token.get_location(),
+                                       Instruction::Id::push_constant_value,
+                                       token.get_text());
                     break;
 
                 case source::Token::Type::integer:
-                    insert_instruction(Instruction(Instruction::Id::push_constant_value,
-                                                   token.get_integer()));
+                    insert_instruction(token.get_location(),
+                                       Instruction::Id::push_constant_value,
+                                       token.get_integer());
                     break;
 
                 case source::Token::Type::floating:
-                    insert_instruction(Instruction(Instruction::Id::push_constant_value,
-                                                   token.get_number()));
+                    insert_instruction(token.get_location(),
+                                       Instruction::Id::push_constant_value,
+                                       token.get_number());
                     break;
 
                 case source::Token::Type::none:
@@ -70,7 +82,9 @@ namespace sorthc::compilation::byte_code
                     break;
 
                 case source::Token::Type::word:
-                    insert_instruction(Instruction(Instruction::Id::execute, token.get_as_word()));
+                    insert_instruction(token.get_location(),
+                                       Instruction::Id::execute,
+                                       token.get_as_word());
                     break;
 
                 default:
@@ -259,6 +273,32 @@ namespace sorthc::compilation::byte_code
             get_construction().get_code().insert(get_construction().get_code().begin(),
                                                  instruction);
         }
+    }
+
+
+    // Insert an instruction into the top construction's code at the current insertion
+    // point.
+    void Context::insert_instruction(const source::Location& location,
+                                     Instruction::Id id,
+                                     const run_time::Value& value)
+    {
+        insert_instruction(Instruction(location, id, value));
+    }
+
+
+    // Insert an instruction into the top construction's code at the current insertion
+    // point.
+    void Context::insert_instruction(Instruction::Id id, const run_time::Value& value)
+    {
+        insert_instruction(Instruction(id, value));
+    }
+
+
+    // Insert an instruction into the top construction's code at the current insertion
+    // point.
+    void Context::insert_instruction(Instruction::Id id)
+    {
+        insert_instruction(Instruction(id));
     }
 
 

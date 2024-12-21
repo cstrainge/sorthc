@@ -21,9 +21,9 @@ namespace sorthc::compilation::byte_code
     class Construction
     {
         private:
-            WordExecutionContext execution_context = WordExecutionContext::run_time;
-            WordVisibility visibility = WordVisibility::visible;
-            WordContextManagement context_management = WordContextManagement::managed;
+            WordExecutionContext execution_context;
+            WordVisibility visibility;
+            WordContextManagement context_management;
 
             source::Location location;
 
@@ -68,13 +68,19 @@ namespace sorthc::compilation::byte_code
 
             ByteCode& get_code() noexcept;
             const ByteCode& get_code() const noexcept;
+            ByteCode&& take_code() noexcept;
+
             void set_code(const ByteCode& value) noexcept;
             void set_code(ByteCode&& value) noexcept;
     };
 
 
     // Stack of constructions that are being managed by the compile context.
-    using ConstructorStack = std::stack<Construction>;
+    using ConstructionStack = std::stack<Construction>;
+
+
+    // List of constructions that represents words that have been defined in the script.
+    using ConstructionList = std::vector<Construction>;
 
 
 }

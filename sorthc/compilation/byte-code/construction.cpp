@@ -126,6 +126,12 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    ByteCode&& Construction::take_code() noexcept
+    {
+        return std::move(code);
+    }
+
+
     void Construction::set_code(const ByteCode& value) noexcept
     {
         code = value;

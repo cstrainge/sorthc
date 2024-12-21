@@ -40,7 +40,10 @@ namespace sorthc::compilation::byte_code
 
             // Stack of constructions that are being managed by the compile context.  A construction
             // can represent a word or a top level block of code being constructed.
-            ConstructorStack constructions;
+            ConstructionStack constructions;
+
+            // List of words that have been defined in the script.
+            ConstructionList words;
 
             // Where in the top construction's code the next instructions should be inserted.
             CodeInsertionPoint insertion_point;
@@ -52,6 +55,8 @@ namespace sorthc::compilation::byte_code
             size_t current_token;
 
         public:
+            // Create a new context associated with a given runtime and take ownership of the given
+            // tokens for compilation.
             Context(run_time::CompilerRuntime& runtime, source::TokenList&& tokens) noexcept;
             Context(const Context& context) = delete;
             Context(Context&& context) = delete;
@@ -60,6 +65,9 @@ namespace sorthc::compilation::byte_code
         public:
             Context& operator =(const Context& context) = delete;
             Context& operator =(Context&& context) = delete;
+
+        public:
+            const ConstructionList& get_words() const noexcept;
 
         public:
             // Compile the context into byte-code instructions.
@@ -72,6 +80,7 @@ namespace sorthc::compilation::byte_code
             std::string compile_until_words(const std::vector<std::string>& words);
 
         public:
+            // Attempt to get the next token in the context's token stream.
             const source::Token& get_next_token();
 
         public:
@@ -106,10 +115,24 @@ namespace sorthc::compilation::byte_code
             // Insert an instruction into the top construction's code at the current insertion
             // point.
             void insert_instruction(const Instruction& instruction);
+
+            // Insert an instruction into the top construction's code at the current insertion
+            // point.
+            void insert_instruction(const source::Location& location,
+                                    Instruction::Id id,
+                                    const run_time::Value& value);
+
+            // Insert an instruction into the top construction's code at the current insertion
+            // point.
+            void insert_instruction(Instruction::Id id, const run_time::Value& value);
+
+            // Insert an instruction into the top construction's code at the current insertion
+            // point.
+            void insert_instruction(Instruction::Id id);
     };
 
 
-    using ContextStack = std::stack<Context>;
+    using ContextStack = std::stack<Context*>;
 
 
 }
