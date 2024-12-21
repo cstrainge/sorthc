@@ -7,6 +7,37 @@ namespace sorthc
 {
 
 
+    namespace source
+    {
+
+
+        class Location;
+
+
+    }
+
+
+    namespace compilation::run_time
+    {
+
+
+        class CompilerRuntime;
+
+
+    }
+
+
+    [[noreturn]]
+    void throw_error(const std::string& message);
+
+
+    [[noreturn]]
+    inline void throw_error(const char* message)
+    {
+        throw_error(std::string(message));
+    }
+
+
     [[noreturn]]
     void throw_error(const source::Location& location, const std::string& message);
 

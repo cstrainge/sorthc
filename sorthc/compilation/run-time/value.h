@@ -26,6 +26,7 @@ namespace sorthc::compilation::run_time
         public:
             Value();
             Value(int64_t value);
+            Value(size_t value);
             Value(double value);
             Value(bool value);
             Value(const char* value);
@@ -35,8 +36,8 @@ namespace sorthc::compilation::run_time
             ~Value() noexcept = default;
 
         public:
-            Value& operator=(const Value& other) noexcept = default;
-            Value& operator=(Value&& other) noexcept = default;
+            Value& operator =(const Value& other) noexcept = default;
+            Value& operator =(Value&& other) noexcept = default;
 
         public:
             bool is_none() const noexcept;

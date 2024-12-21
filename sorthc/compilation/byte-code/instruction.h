@@ -55,8 +55,8 @@ namespace sorthc::compilation::byte_code
             ~Instruction() noexcept = default;
 
         public:
-            Instruction& operator=(const Instruction& other) noexcept = default;
-            Instruction& operator=(Instruction&& other) noexcept = default;
+            Instruction& operator =(const Instruction& other) noexcept = default;
+            Instruction& operator =(Instruction&& other) noexcept = default;
 
         public:
             const std::optional<source::Location>& get_location() const noexcept;

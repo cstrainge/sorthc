@@ -2,6 +2,31 @@
 #include "sorthc.h"
 
 
+
+#if (IS_APPLE == 1)
+
+    #include <assert.h>
+    #include <mach-o/dyld.h>
+
+#elif (IS_UNIX == 1)
+
+    #include <linux/limits.h>
+    #include <unistd.h>
+
+#elif (IS_WINDOWS == 1)
+
+    #include <windows.h>
+
+#endif
+
+// Disable the CRT secure warnings for the deprecation warning for the function std::get_env on
+// Windows.
+#define _CRT_SECURE_NO_WARNINGS 1
+#include <cstdlib>
+#undef _CRT_SECURE_NO_WARNINGS
+
+
+
 namespace
 {
 
@@ -13,7 +38,7 @@ namespace
         std::filesystem::path base_path;
 
         // Refer to OS specific means to get the current executable's path.
-        #if defined(__APPLE__)
+        #if (IS_APPLE == 1)
 
             uint32_t buffer_size = 0;
 
@@ -25,7 +50,7 @@ namespace
 
             base_path = std::filesystem::canonical(&buffer[0]).remove_filename();
 
-        #elif defined(__linux__)
+        #elif (IS_UNIX == 1)
 
             char buffer [PATH_MAX + 1];
             ssize_t count = 0;
@@ -42,7 +67,7 @@ namespace
 
             base_path = std::filesystem::canonical(buffer).remove_filename();
 
-        #elif defined(IS_WINDOWS)
+        #elif (IS_WINDOWS == 1)
 
             char buffer [ MAX_PATH + 1];
 
@@ -105,6 +130,7 @@ int main(int argc, char* argv[])
 
     try
     {
+        // Create a compiler and compile the source file.
         auto compiler = sorthc::compilation::Compiler(get_std_lib_directory());
 
         if (argc != 3)
@@ -112,6 +138,7 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Usage: sorthc <source-file> <output-file>");
         }
 
+        // Compile the source file, to the given output file.
         compiler.compile(argv[1], argv[2]);
     }
     catch (const std::exception& error)

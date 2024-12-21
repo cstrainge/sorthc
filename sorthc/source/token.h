@@ -37,8 +37,8 @@ namespace sorthc::source
             ~Token() noexcept = default;
 
         public:
-            Token& operator=(const Token& token) noexcept = default;
-            Token& operator=(Token&& token) noexcept = default;
+            Token& operator =(const Token& token) noexcept = default;
+            Token& operator =(Token&& token) noexcept = default;
 
             operator bool() const noexcept;
 

@@ -23,8 +23,8 @@ namespace sorthc::source
             ~Location() noexcept = default;
 
         public:
-            Location& operator=(const Location& location) noexcept = default;
-            Location& operator=(Location&& location) noexcept = default;
+            Location& operator =(const Location& location) noexcept = default;
+            Location& operator =(Location&& location) noexcept = default;
 
         public:
             const std::string& get_file() const noexcept;

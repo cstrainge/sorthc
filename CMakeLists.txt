@@ -57,7 +57,8 @@ file(GLOB SORTH_C_SRCS "${SORTH_C_SRC_DIR}/*.cpp"
                        "${SORTH_C_SRC_DIR}/source/*.cpp"
                        "${SORTH_C_SRC_DIR}/compilation/*.cpp"
                        "${SORTH_C_SRC_DIR}/compilation/byte-code/*.cpp"
-                       "${SORTH_C_SRC_DIR}/compilation/run-time/*.cpp")
+                       "${SORTH_C_SRC_DIR}/compilation/run-time/*.cpp"
+                       "${SORTH_C_SRC_DIR}/compilation/run-time/built-in-words/*.cpp")
 
 
 add_executable(${PROJECT_NAME} ${SORTH_C_SRCS})
@@ -66,7 +67,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_C_SRC_DIR}/"
                                                    "${SORTH_C_SRC_DIR}/source/"
                                                    "${SORTH_C_SRC_DIR}/compilation/"
                                                    "${SORTH_C_SRC_DIR}/compilation/byte-code/"
-                                                   "${SORTH_C_SRC_DIR}/compilation/run-time/")
+                                                   "${SORTH_C_SRC_DIR}/compilation/run-time/"
+                                                   "${SORTH_C_SRC_DIR}/compilation/run-time/built-in-words/")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${DIST_DIR})
 
