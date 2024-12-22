@@ -61,7 +61,9 @@ namespace sorthc::compilation::byte_code
         public:
             const std::optional<source::Location>& get_location() const noexcept;
             Id get_id() const noexcept;
+
             const run_time::Value& get_value() const noexcept;
+            run_time::Value& get_value() noexcept;
     };
 
 

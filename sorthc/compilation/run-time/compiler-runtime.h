@@ -120,9 +120,14 @@ namespace sorthc::compilation::run_time
         public:
             // Get the current source code location the compiler is at.
             const source::Location& get_location() const noexcept;
+            void set_location(const source::Location& value) noexcept;
 
             // Get the cache of compiled scripts.
             const ScriptCache& get_script_cache() const noexcept;
+
+        public:
+            void mark_context();
+            void release_context();
 
         public:
             // Append a search path to the run-time's search path collection.
@@ -219,6 +224,9 @@ namespace sorthc::compilation::run_time
             // Pop a value from the data stack and convert it to a string.
             std::string pop_as_string();
 
+            // Pop a value from the data stack and convert it to a byte-code block.
+            byte_code::ByteCode pop_as_byte_code();
+
         public:
             // Try to execute a word by name.
             void execute(const std::string& word);
@@ -255,7 +263,7 @@ namespace sorthc::compilation::run_time
     // Called by C++ code to add a new word to the compiler's runtime for access to immediate words
     // as executed by the compiler.
     #define ADD_NATIVE_WORD(runtime, name, handler) \
-        runtime->add_word(name, \
+        runtime.add_word(name, \
                          std::filesystem::path(__FILE__), \
                          __LINE__, \
                          1, \
@@ -274,7 +282,7 @@ namespace sorthc::compilation::run_time
                          __LINE__, \
                          1, \
                          handler, \
-                         sorthc::compilation::WordExecutionContext::immediate, \
+                         sorthc::compilation::WordExecutionContext::compile_time, \
                          sorthc::compilation::WordVisibility::visible, \
                          sorthc::compilation::WordType::internal, \
                          sorthc::compilation::WordContextManagement::unmanaged)

@@ -70,6 +70,9 @@ namespace sorthc::compilation::byte_code
             const ConstructionList& get_words() const noexcept;
 
         public:
+            void add_script_word(const Construction& word);
+
+        public:
             // Compile the context into byte-code instructions.
             void compile_token_list();
 

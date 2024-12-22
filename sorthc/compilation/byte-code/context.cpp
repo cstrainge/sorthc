@@ -33,6 +33,12 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    void Context::add_script_word(const Construction& word)
+    {
+        words.push_back(word);
+    }
+
+
     // Compile a single token into byte-code instruction(s).
     void Context::compile_token(const source::Token& token)
     {

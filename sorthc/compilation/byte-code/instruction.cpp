@@ -57,4 +57,10 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    run_time::Value& Instruction::get_value() noexcept
+    {
+        return value;
+    }
+
+
 }

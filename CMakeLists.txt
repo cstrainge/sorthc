@@ -70,7 +70,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_C_SRC_DIR}/"
                                                    "${SORTH_C_SRC_DIR}/compilation/run-time/"
                                                    "${SORTH_C_SRC_DIR}/compilation/run-time/built-in-words/")
 
+
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${DIST_DIR})
+
+target_precompile_headers(${PROJECT_NAME} PRIVATE "${SORTH_C_SRC_DIR}/sorthc.h")
 
 
 
@@ -104,16 +107,17 @@ add_dependencies(${PROJECT_NAME} ${SORTH_RUNTIME_NAME})
 
 
 # Enable link-time optimization if we're in release mode and it's supported.
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    include(CheckIPOSupported)
-    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_output)
-    if(ipo_supported)
-        message(STATUS "IPO/LTO is supported: enabling for Release build.")
-        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-    else()
-        message(status "IPO/LTO not supported: ${ipo_output}")
-    endif()
-endif()
+#include(CheckIPOSupported)
+#
+#if (CMAKE_BUILD_TYPE STREQUAL "Release")
+#    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_output)
+#    if(ipo_supported)
+#        message(STATUS "IPO/LTO is supported: enabling for Release build.")
+#        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+#    else()
+#        message(status "IPO/LTO not supported: ${ipo_output}")
+#    endif()
+#endif()
 
 
 

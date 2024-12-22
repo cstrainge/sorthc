@@ -40,9 +40,31 @@ namespace sorthc::compilation::run_time
     }
 
 
+    void CompilerRuntime::set_location(const source::Location& value) noexcept
+    {
+        location = value;
+    }
+
+
     const ScriptCache& CompilerRuntime::get_script_cache() const noexcept
     {
         return script_cache;
+    }
+
+
+    void CompilerRuntime::mark_context()
+    {
+        dictionary.mark_context();
+        handlers.mark_context();
+        variables.mark_context();
+    }
+
+
+    void CompilerRuntime::release_context()
+    {
+        dictionary.release_context();
+        handlers.release_context();
+        variables.release_context();
     }
 
 
@@ -140,6 +162,7 @@ namespace sorthc::compilation::run_time
                                    WordType type,
                                    WordContextManagement context_management)
     {
+        std::cout << "Adding word: " << info.name << std::endl;
         dictionary.insert(info.name,
                           Word(execution_context,
                                type,
@@ -215,7 +238,8 @@ namespace sorthc::compilation::run_time
                 runtime.push(static_cast<int64_t>(index));
             };
 
-        ADD_NATIVE_WORD(this, name, handler);
+        auto& this_ref = *this;
+        ADD_NATIVE_WORD(this_ref, name, handler);
     }
 
 
@@ -226,7 +250,8 @@ namespace sorthc::compilation::run_time
                 runtime.push(value);
             };
 
-        ADD_NATIVE_WORD(this, name, handler);
+        auto& this_ref = *this;
+        ADD_NATIVE_WORD(this_ref, name, handler);
     }
 
 
@@ -290,6 +315,12 @@ namespace sorthc::compilation::run_time
     std::string CompilerRuntime::pop_as_string()
     {
         return pop().get_string(*this);
+    }
+
+
+    byte_code::ByteCode CompilerRuntime::pop_as_byte_code()
+    {
+        return pop().get_byte_code();
     }
 
 

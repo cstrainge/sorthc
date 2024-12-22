@@ -49,6 +49,26 @@ namespace sorthc::compilation::run_time
     }
 
 
+    Value::Value(const byte_code::ByteCode& value)
+    : value(value)
+    {
+    }
+
+
+    Value::Value(const source::Token& token)
+    : value(None())
+    {
+        if (token.get_type() == source::Token::Type::string)
+        {
+            value = token.get_text();
+        }
+        else
+        {
+            value = token.get_as_word();
+        }
+    }
+
+
     bool Value::is_none() const noexcept
     {
         return std::holds_alternative<None>(value);
@@ -82,6 +102,12 @@ namespace sorthc::compilation::run_time
     bool Value::is_string() const noexcept
     {
         return std::holds_alternative<std::string>(value);
+    }
+
+
+    bool Value::is_byte_code() const noexcept
+    {
+        return std::holds_alternative<byte_code::ByteCode>(value);
     }
 
 
@@ -144,6 +170,14 @@ namespace sorthc::compilation::run_time
     }
 
 
+    const byte_code::ByteCode& Value::get_byte_code() const
+    {
+        assert(is_byte_code());
+
+        return std::get<byte_code::ByteCode>(value);
+    }
+
+
     int64_t Value::get_int(const CompilerRuntime& runtime) const
     {
         if (is_double())
@@ -200,6 +234,14 @@ namespace sorthc::compilation::run_time
         throw_error_if(!is_string(), runtime, "Value is not a string.");
 
         return std::get<std::string>(value);
+    }
+
+
+    const byte_code::ByteCode& Value::get_byte_code(const CompilerRuntime& runtime) const
+    {
+        throw_error_if(!is_byte_code(), runtime, "Value is not byte code.");
+
+        return std::get<byte_code::ByteCode>(value);
     }
 
 
