@@ -26,7 +26,7 @@ namespace sorthc::compilation::run_time
         //
         // The core words are shared by the compiler's internal runtime and the run-time that the
         // compiled code ultimately runs in.
-        auto& runtime_lib = compile_script("std/core-words.f");
+        auto runtime_lib = compile_script("std/core-words.f");
 
         // JIT compile the standard library's words and top level code, the words in the script will
         // automaticaly be added to the run-time's dictionary.
@@ -102,7 +102,7 @@ namespace sorthc::compilation::run_time
 
 
     // Compile a script to byte-code and add it to the cache.
-    byte_code::ScriptPtr& CompilerRuntime::compile_script(const std::filesystem::path& path)
+    byte_code::ScriptPtr CompilerRuntime::compile_script(const std::filesystem::path& path)
     {
         // First check if the script is already in the cache, if it's already there we con't need to
         // do anything.  Note that we still do a full find_file on it to make sure the path is
@@ -135,10 +135,13 @@ namespace sorthc::compilation::run_time
 
         // Create a new script object and add it to the cache.
         auto construction = get_compile_context().drop_construction();
+
+        auto sub_scripts = std::move(get_compile_context().take_sub_scripts());
         auto words = std::move(get_compile_context().take_words());
         auto code = std::move(construction.take_code());
 
-        auto script = std::make_shared<byte_code::Script>(std::move(full_path),
+        auto script = std::make_shared<byte_code::Script>(std::move(sub_scripts),
+                                                          std::move(full_path),
                                                           std::move(words),
                                                           std::move(code));
 

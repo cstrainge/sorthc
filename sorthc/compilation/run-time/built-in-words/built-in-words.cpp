@@ -472,17 +472,15 @@ namespace sorthc::compilation::run_time::built_in_words
         }
 
 
-        void word_include(CompilerRuntime& runtime)
-        {
-            auto path = runtime.pop_as_string();
-            runtime.compile_script(path);
-        }
-
-
         void word_include_im(CompilerRuntime& runtime)
         {
-            auto& token = runtime.get_compile_context().get_next_token();
-            runtime.compile_script(token.get_as_word());
+            // Get the name of the script file to include from the token stream.  Then byte-code
+            // compile that script.
+            auto script_file = runtime.get_compile_context().get_next_token().get_as_word();
+            auto loaded_script = runtime.compile_script(script_file);
+
+            // Add the loaded script to the current script's includes.
+            runtime.get_compile_context().append_script(loaded_script);
         }
 
 
@@ -689,7 +687,6 @@ namespace sorthc::compilation::run_time::built_in_words
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "signature:", word_signature);
 
         // Run-time state words.
-        ADD_NATIVE_WORD(runtime, "include", word_include);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[include]", word_include_im);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[if]", word_if_im);
         ADD_NATIVE_WORD(runtime, "throw", word_throw);

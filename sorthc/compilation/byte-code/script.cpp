@@ -7,10 +7,12 @@ namespace sorthc::compilation::byte_code
 {
 
 
-    Script::Script(std::filesystem::path&& script_path,
+    Script::Script(SubScriptList&& sub_scripts,
+                   std::filesystem::path&& script_path,
                    ConstructionList&& words,
                    ByteCode&& top_level) noexcept
-    : script_path(std::move(script_path)),
+    : sub_scripts(std::move(sub_scripts)),
+      script_path(std::move(script_path)),
       words(std::move(words)),
       top_level(std::move(top_level)),
       word_map()
@@ -19,6 +21,12 @@ namespace sorthc::compilation::byte_code
         {
             word_map.insert({ this->words[i].get_name(), i });
         }
+    }
+
+
+    const SubScriptList& Script::get_sub_scripts() const noexcept
+    {
+        return sub_scripts;
     }
 
 

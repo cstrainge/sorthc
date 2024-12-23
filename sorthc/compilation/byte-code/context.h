@@ -38,6 +38,9 @@ namespace sorthc::compilation::byte_code
             // Reference to the owning compiler run-time.
             run_time::CompilerRuntime& runtime;
 
+            // List of scripts that have been loaded by the one being constructed.
+            SubScriptList sub_scripts;
+
             // Stack of constructions that are being managed by the compile context.  A construction
             // can represent a word or a top level block of code being constructed.
             ConstructionStack constructions;
@@ -74,6 +77,9 @@ namespace sorthc::compilation::byte_code
         public:
             void add_script_word(const Construction& word);
 
+            const SubScriptList& get_sub_scripts() const noexcept;
+            SubScriptList&& take_sub_scripts() noexcept;
+
         public:
             // Compile the context into byte-code instructions.
             void compile_token_list();
@@ -87,6 +93,9 @@ namespace sorthc::compilation::byte_code
         public:
             // Attempt to get the next token in the context's token stream.
             const source::Token& get_next_token();
+
+        public:
+            void append_script(const byte_code::ScriptPtr& script);
 
         public:
             // Create a new construction an push it onto the stack.

@@ -47,6 +47,18 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    const SubScriptList& Context::get_sub_scripts() const noexcept
+    {
+        return sub_scripts;
+    }
+
+
+    SubScriptList&& Context::take_sub_scripts() noexcept
+    {
+        return std::move(sub_scripts);
+    }
+
+
     // Compile a single token into byte-code instruction(s).
     void Context::compile_token(const source::Token& token)
     {
@@ -211,6 +223,12 @@ namespace sorthc::compilation::byte_code
 
         ++current_token;
         return tokens[current_token];
+    }
+
+
+    void Context::append_script(const byte_code::ScriptPtr& script)
+    {
+        sub_scripts.push_back(script);
     }
 
 

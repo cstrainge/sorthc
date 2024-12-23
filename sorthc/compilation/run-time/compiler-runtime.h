@@ -147,7 +147,7 @@ namespace sorthc::compilation::run_time
         public:
             // Find and byte-code compile a script file.  Once compiled the script is added to the
             // cache.  If the script is already in the cache, nothing is done.
-            byte_code::ScriptPtr& compile_script(const std::filesystem::path& path);
+            byte_code::ScriptPtr compile_script(const std::filesystem::path& path);
 
         public:
             // Construct a new compilation context for the given token list representing a script.

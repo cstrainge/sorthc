@@ -15,7 +15,9 @@ namespace sorthc::compilation::byte_code
 
 
     class Script;
-    using SubScriptList = std::vector<Script>;
+
+    using ScriptPtr = std::shared_ptr<Script>;
+    using SubScriptList = std::vector<ScriptPtr>;
 
 
     using WordMap = std::unordered_map<std::string, size_t>;
@@ -24,6 +26,9 @@ namespace sorthc::compilation::byte_code
     class Script : public std::enable_shared_from_this<Script>
     {
         private:
+            // The list of sub-scripts that have been loaded by the script.
+            SubScriptList sub_scripts;
+
             // The path to the original script file.
             std::filesystem::path script_path;
 
@@ -36,12 +41,10 @@ namespace sorthc::compilation::byte_code
             // The list of instructions that make up the top level of the script.
             ByteCode top_level;
 
-            // The list of sub-scripts that have been loaded by the script.
-            SubScriptList sub_scripts;
-
         public:
             Script() = default;
-            Script(std::filesystem::path&& script_path,
+            Script(SubScriptList&& sub_scripts,
+                   std::filesystem::path&& script_path,
                    ConstructionList&& words,
                    ByteCode&& top_level) noexcept;
             Script(const Script& script) = default;
@@ -53,6 +56,8 @@ namespace sorthc::compilation::byte_code
             Script& operator =(Script&& script) = default;
 
         public:
+            const SubScriptList& get_sub_scripts() const noexcept;
+
             const std::filesystem::path& get_script_path() const noexcept;
 
             const ConstructionList& get_words() const noexcept;
@@ -60,9 +65,6 @@ namespace sorthc::compilation::byte_code
 
             const ByteCode& get_top_level() const noexcept;
     };
-
-
-    using ScriptPtr = std::shared_ptr<Script>;
 
 
 }
