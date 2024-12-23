@@ -69,6 +69,8 @@ namespace sorthc::compilation::byte_code
         public:
             const ConstructionList& get_words() const noexcept;
 
+            ConstructionList&& take_words() noexcept;
+
         public:
             void add_script_word(const Construction& word);
 

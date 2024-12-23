@@ -25,6 +25,12 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    ConstructionList&& Context::take_words() noexcept
+    {
+        return std::move(words);
+    }
+
+
     // Compile the context into byte-code instructions.
     void Context::compile_token_list()
     {

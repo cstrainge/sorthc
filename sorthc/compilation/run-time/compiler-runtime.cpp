@@ -128,10 +128,10 @@ namespace sorthc::compilation::run_time
 
         // Create a new script object and add it to the cache.
         auto construction = get_compile_context().drop_construction();
-        auto& words = get_compile_context().get_words();
+        auto words = std::move(get_compile_context().take_words());
         auto code = std::move(construction.take_code());
 
-        auto script = byte_code::Script(std::move(full_path), words, std::move(code));
+        auto script = byte_code::Script(std::move(full_path), std::move(words), std::move(code));
 
         // Cache the script, and return the reference to the cached one.
         script_cache.insert(std::make_pair(script.get_script_path(), script));

@@ -113,16 +113,13 @@ namespace sorthc::compilation::byte_code
     run_time::WordHandler Jit::jit_compile(run_time::CompilerRuntime& runtime, const Script& script)
     {
         // JIT compile and register all of the words in the script with the run-time.
-        for (const auto& [ name, word_construction ] : script.get_words())
+        for (const auto& word_construction : script.get_words())
         {
             jit_compile(runtime, word_construction);
         }
 
         // Get the script's top level code.
         const auto& top_level = script.get_top_level();
-        /* = byte_code::Construction(source::Location(script.get_script_path()),
-                                                    script.get_script_path(),
-                                                    std::move(script.get_top_level()));*/
 
         // If there is no top level code, just return a handler that does nothing.
         if (top_level.empty())

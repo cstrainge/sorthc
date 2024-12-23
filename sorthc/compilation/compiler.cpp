@@ -27,8 +27,8 @@ namespace sorthc::compilation
 
         for (const auto& word : script.get_words())
         {
-            std::cout << "Word: " << word.first << std::endl
-                      << pretty_print(runtime, word.second.get_code())
+            std::cout << "Word: " << word.get_name() << std::endl
+                      << pretty_print(runtime, word.get_code())
                       << std::endl;
         }
 
