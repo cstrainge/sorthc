@@ -62,4 +62,7 @@ namespace sorthc::compilation::byte_code
     };
 
 
+    using ScriptPtr = std::shared_ptr<Script>;
+
+
 }

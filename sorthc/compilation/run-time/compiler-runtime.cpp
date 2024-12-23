@@ -8,7 +8,8 @@ namespace sorthc::compilation::run_time
 
 
     CompilerRuntime::CompilerRuntime(const std::filesystem::path& system_path)
-    : search_paths(),
+    : standard_library(),
+      search_paths(),
       script_cache(),
       location(LOCATION_HERE),
       compile_contexts()
@@ -25,22 +26,28 @@ namespace sorthc::compilation::run_time
         //
         // The core words are shared by the compiler's internal runtime and the run-time that the
         // compiled code ultimately runs in.
-        auto& std_lib = compile_script("std/core-words.f");
+        auto& runtime_lib = compile_script("std/core-words.f");
 
         // JIT compile the standard library's words and top level code, the words in the script will
         // automaticaly be added to the run-time's dictionary.
-        auto top_level = byte_code::get_jit_engine().jit_compile(*this, std_lib);
+        auto top_level = byte_code::get_jit_engine().jit_compile(*this, runtime_lib);
         top_level(*this);
 
         // Now that we've JIT compiled the essential words, we can load the rest of the standard
-        // library.
-        compile_script("std.f");
+        // library for later reference by the user script(s) we're going to compile.
+        standard_library = compile_script("std.f");
     }
 
 
     const source::Location& CompilerRuntime::get_location() const noexcept
     {
         return location;
+    }
+
+
+    const byte_code::ScriptPtr& CompilerRuntime::get_standard_library() const noexcept
+    {
+        return standard_library;
     }
 
 
@@ -95,7 +102,7 @@ namespace sorthc::compilation::run_time
 
 
     // Compile a script to byte-code and add it to the cache.
-    byte_code::Script& CompilerRuntime::compile_script(const std::filesystem::path& path)
+    byte_code::ScriptPtr& CompilerRuntime::compile_script(const std::filesystem::path& path)
     {
         // First check if the script is already in the cache, if it's already there we con't need to
         // do anything.  Note that we still do a full find_file on it to make sure the path is
@@ -131,12 +138,14 @@ namespace sorthc::compilation::run_time
         auto words = std::move(get_compile_context().take_words());
         auto code = std::move(construction.take_code());
 
-        auto script = byte_code::Script(std::move(full_path), std::move(words), std::move(code));
+        auto script = std::make_shared<byte_code::Script>(std::move(full_path),
+                                                          std::move(words),
+                                                          std::move(code));
 
-        // Cache the script, and return the reference to the cached one.
-        script_cache.insert(std::make_pair(script.get_script_path(), script));
+        // Cache the script, and return a reference to the new script.
+        script_cache.insert(std::make_pair(script->get_script_path(), script));
 
-        return script_cache[script.get_script_path()];
+        return script;
     }
 
 

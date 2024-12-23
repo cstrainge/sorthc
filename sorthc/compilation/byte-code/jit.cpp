@@ -110,16 +110,17 @@ namespace sorthc::compilation::byte_code
     //
     // The immediate words would have already been compiled and registered with the compiler's
     // runtime.
-    run_time::WordHandler Jit::jit_compile(run_time::CompilerRuntime& runtime, const Script& script)
+    run_time::WordHandler Jit::jit_compile(run_time::CompilerRuntime& runtime,
+                                           const ScriptPtr& script)
     {
         // JIT compile and register all of the words in the script with the run-time.
-        for (const auto& word_construction : script.get_words())
+        for (const auto& word_construction : script->get_words())
         {
             jit_compile(runtime, word_construction);
         }
 
         // Get the script's top level code.
-        const auto& top_level = script.get_top_level();
+        const auto& top_level = script->get_top_level();
 
         // If there is no top level code, just return a handler that does nothing.
         if (top_level.empty())
@@ -132,8 +133,9 @@ namespace sorthc::compilation::byte_code
             return null_handler;
         }
 
-        // Make sure we have a name for the word that's usable for the JIT engine.
-        auto filtered_name = filter_word_name(script.get_script_path().string());
+        // Compile the script's top-level code into a handler.  Start off by filtering the name of
+        // the script for the JIT engine.
+        auto filtered_name = filter_word_name(script->get_script_path().string());
 
         // Create the context for this compilation.
         auto [ module, context ] = create_jit_module_context(filtered_name);

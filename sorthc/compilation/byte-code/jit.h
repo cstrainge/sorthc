@@ -79,7 +79,7 @@ namespace sorthc::compilation::byte_code
             // The immediate words would have already been compiled and registered with the
             // compiler's runtime.
             run_time::WordHandler jit_compile(run_time::CompilerRuntime& runtime,
-                                              const Script& script);
+                                              const ScriptPtr& script);
 
         private:
             // Register the helper function pointers with the JIT engine.

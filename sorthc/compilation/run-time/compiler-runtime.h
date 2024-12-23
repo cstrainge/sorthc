@@ -12,7 +12,7 @@ namespace sorthc::compilation::run_time
 
 
     // Define a cache of scripts that have been compiled into byte-code.
-    using ScriptCache = std::unordered_map<std::filesystem::path, byte_code::Script>;
+    using ScriptCache = std::unordered_map<std::filesystem::path, byte_code::ScriptPtr>;
 
 
     // Reference to a function that actually handles the execution for a word.
@@ -76,6 +76,9 @@ namespace sorthc::compilation::run_time
     class CompilerRuntime
     {
         private:
+            // The script that represents the standard library.
+            byte_code::ScriptPtr standard_library;
+
             // Search paths for the compiler to find source files and included files.
             SearchPaths search_paths;
 
@@ -118,6 +121,9 @@ namespace sorthc::compilation::run_time
             CompilerRuntime& operator =(CompilerRuntime&& runtime) = delete;
 
         public:
+            // Get a reference to the standard library script.
+            const byte_code::ScriptPtr& get_standard_library() const noexcept;
+
             // Get the current source code location the compiler is at.
             const source::Location& get_location() const noexcept;
             void set_location(const source::Location& value) noexcept;
@@ -141,7 +147,7 @@ namespace sorthc::compilation::run_time
         public:
             // Find and byte-code compile a script file.  Once compiled the script is added to the
             // cache.  If the script is already in the cache, nothing is done.
-            byte_code::Script& compile_script(const std::filesystem::path& path);
+            byte_code::ScriptPtr& compile_script(const std::filesystem::path& path);
 
         public:
             // Construct a new compilation context for the given token list representing a script.
