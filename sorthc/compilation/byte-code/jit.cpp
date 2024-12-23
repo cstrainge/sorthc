@@ -71,8 +71,6 @@ namespace sorthc::compilation::byte_code
     // immediate words.
     void Jit::jit_compile(run_time::CompilerRuntime& runtime, const Construction& construction)
     {
-        std::cout << "JIT compiling: " << construction.get_name() << std::endl;
-
         // Make sure we have a name for the word that's usable for the JIT engine.
         auto filtered_name = filter_word_name(construction.get_name());
 
@@ -97,7 +95,13 @@ namespace sorthc::compilation::byte_code
                                             std::move(constants),
                                             CodeGenType::word);
 
-        //runtime.add_word();
+        runtime.add_word(construction.get_name(),
+                         construction.get_location(),
+                         handler,
+                         construction.get_execution_context(),
+                         construction.get_visibility(),
+                         compilation::WordType::scripted,
+                         construction.get_context_management());
     }
 
 
@@ -108,8 +112,6 @@ namespace sorthc::compilation::byte_code
     // runtime.
     run_time::WordHandler Jit::jit_compile(run_time::CompilerRuntime& runtime, const Script& script)
     {
-        std::cout << "JIT compiling script: " << script.get_script_path() << std::endl;
-
         // JIT compile and register all of the words in the script with the run-time.
         for (const auto& [ name, word_construction ] : script.get_words())
         {

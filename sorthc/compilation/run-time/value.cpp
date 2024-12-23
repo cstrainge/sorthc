@@ -38,6 +38,54 @@ namespace sorthc::compilation::run_time
     }
 
 
+    std::strong_ordering operator <=>(const Value& lhs, const Value& rhs) noexcept
+    {
+        if (lhs.value.index() != rhs.value.index())
+        {
+            return lhs.value.index() <=> rhs.value.index();
+        }
+
+        if (lhs.is_none())
+        {
+            return std::strong_ordering::equal;
+        }
+
+        if (lhs.is_int())
+        {
+            return lhs.get_int() <=> rhs.get_int();
+        }
+
+        if (lhs.is_double())
+        {
+            double a = lhs.get_double();
+            double b = rhs.get_double();
+
+            if (a > b)
+            {
+                return std::strong_ordering::greater;
+            }
+            else if (a < b)
+            {
+                return std::strong_ordering::less;
+            }
+
+            return std::strong_ordering::equal;
+        }
+
+        if (lhs.is_bool())
+        {
+            return lhs.get_bool() <=> rhs.get_bool();
+        }
+
+        if (lhs.is_string())
+        {
+            return lhs.get_string() <=> rhs.get_string();
+        }
+
+        return std::strong_ordering::equal;
+    }
+
+
     // Return a string value, but convert the value to a string if it is not a string.  Also enclose
     // the string in quotes, and will escape any characters that need to be escaped.
     std::string stringify(const Value& value) noexcept

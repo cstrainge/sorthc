@@ -58,9 +58,11 @@ namespace sorthc::compilation::byte_code
             }
             else
             {
+                // At this phase we always use the word name for the execute instruction.  It is in
+                // the second phase where we resolve the name to it's actual handler.
                 insert_instruction(token.get_location(),
                                     Instruction::Id::execute,
-                                    word.get_handler_index());
+                                    word.get_name());
             }
         }
         else

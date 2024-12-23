@@ -331,6 +331,54 @@ namespace sorthc::compilation::run_time::built_in_words
         }
 
 
+        void word_dup(CompilerRuntime& runtime)
+        {
+            auto next = runtime.pop();
+
+            runtime.push(next);
+            runtime.push(next);
+        }
+
+
+        void word_drop(CompilerRuntime& runtime)
+        {
+            runtime.pop();
+        }
+
+
+        void word_swap(CompilerRuntime& runtime)
+        {
+            auto a = runtime.pop();
+            auto b = runtime.pop();
+
+            runtime.push(a);
+            runtime.push(b);
+        }
+
+
+        void word_over(CompilerRuntime& runtime)
+        {
+            auto a = runtime.pop();
+            auto b = runtime.pop();
+
+            runtime.push(a);
+            runtime.push(b);
+            runtime.push(a);
+        }
+
+
+        void word_rot(CompilerRuntime& runtime)
+        {
+            auto c = runtime.pop();
+            auto b = runtime.pop();
+            auto a = runtime.pop();
+
+            runtime.push(c);
+            runtime.push(a);
+            runtime.push(b);
+        }
+
+
         void word_start_word(CompilerRuntime& runtime)
         {
             // Get the name and location of the word we are defining from the next token.
@@ -424,6 +472,164 @@ namespace sorthc::compilation::run_time::built_in_words
         }
 
 
+        void word_include(CompilerRuntime& runtime)
+        {
+            auto path = runtime.pop_as_string();
+            runtime.compile_script(path);
+        }
+
+
+        void word_include_im(CompilerRuntime& runtime)
+        {
+            auto& token = runtime.get_compile_context().get_next_token();
+            runtime.compile_script(token.get_as_word());
+        }
+
+
+        void word_if_im(CompilerRuntime& runtime)
+        {
+            auto is_one_of = [](source::Token& match, std::vector<std::string>& words) -> bool
+                {
+                    if (match.get_type() != source::Token::Type::word)
+                    {
+                        return false;
+                    }
+
+                    auto match_text = match.get_text();
+
+                    for (auto& word : words)
+                    {
+                        if (match_text == word)
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                };
+
+            auto skip_until = [&](std::vector<std::string> words) -> std::string
+                {
+                    auto token = runtime.get_compile_context().get_next_token();
+
+                    while (!is_one_of(token, words))
+                    {
+                        token = runtime.get_compile_context().get_next_token();
+                    }
+
+                    return token.get_text();
+                };
+
+
+            auto result = runtime.pop_as_bool();
+
+            if (result)
+            {
+                auto found = runtime.get_compile_context().compile_until_words(
+                    {
+                        "[else]",
+                        "[then]"
+                    });
+
+                if (found == "[else]")
+                {
+                    skip_until({ "[then]" });
+                }
+            }
+            else
+            {
+                auto found = skip_until({ "[else]", "[then]" });
+
+                if (found == "[else]")
+                {
+                    runtime.get_compile_context().compile_until_words({ "[then]" });
+                }
+            }
+        }
+
+
+        void word_throw(CompilerRuntime& runtime)
+        {
+            throw_error(runtime, runtime.pop_as_string());
+        }
+
+
+        void word_equal(CompilerRuntime& runtime)
+        {
+            auto b = runtime.pop();
+            auto a = runtime.pop();
+
+            runtime.push(a == b);
+        }
+
+
+        void word_greater_equal(CompilerRuntime& runtime)
+        {
+            auto b = runtime.pop();
+            auto a = runtime.pop();
+
+            runtime.push((a <=> b == std::strong_ordering::greater) || a == b);
+        }
+
+
+        void word_less_equal(CompilerRuntime& runtime)
+        {
+            auto b = runtime.pop();
+            auto a = runtime.pop();
+
+            runtime.push((a <=> b == std::strong_ordering::less) || a == b);
+        }
+
+
+        void word_greater(CompilerRuntime& runtime)
+        {
+            auto b = runtime.pop();
+            auto a = runtime.pop();
+
+            runtime.push(a <=> b == std::strong_ordering::greater);
+        }
+
+
+        void word_less(CompilerRuntime& runtime)
+        {
+            auto b = runtime.pop();
+            auto a = runtime.pop();
+
+            runtime.push(a <=> b == std::strong_ordering::less);
+        }
+
+
+        void word_none(CompilerRuntime& runtime)
+        {
+            runtime.push(Value());
+        }
+
+
+        void word_true(CompilerRuntime& runtime)
+        {
+            runtime.push(true);
+        }
+
+
+        void word_false(CompilerRuntime& runtime)
+        {
+            runtime.push(false);
+        }
+
+
+        void word_unique_str(CompilerRuntime& runtime)
+        {
+            static std::atomic<int64_t> index = 0;
+
+            std::stringstream stream;
+            auto current = index.fetch_add(1, std::memory_order_relaxed);
+
+            stream << "unique-" << std::setw(4) << std::setfill('0') << std::hex << current;
+
+            runtime.push(stream.str());
+        }
+
+
     }
 
 
@@ -467,6 +673,12 @@ namespace sorthc::compilation::run_time::built_in_words
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[defined?]", word_is_defined_im);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[undefined?]", word_is_undefined_im);
 
+        ADD_NATIVE_WORD(runtime, "dup", word_dup);
+        ADD_NATIVE_WORD(runtime, "drop", word_drop);
+        ADD_NATIVE_WORD(runtime, "swap", word_swap);
+        ADD_NATIVE_WORD(runtime, "over", word_over);
+        ADD_NATIVE_WORD(runtime, "rot", word_rot);
+
         // Word creation words.
         ADD_NATIVE_IMMEDIATE_WORD(runtime, ":", word_start_word);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, ";", word_end_word);
@@ -475,6 +687,25 @@ namespace sorthc::compilation::run_time::built_in_words
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "contextless", word_contextless);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "description:", word_description);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "signature:", word_signature);
+
+        // Run-time state words.
+        ADD_NATIVE_WORD(runtime, "include", word_include);
+        ADD_NATIVE_IMMEDIATE_WORD(runtime, "[include]", word_include_im);
+        ADD_NATIVE_IMMEDIATE_WORD(runtime, "[if]", word_if_im);
+        ADD_NATIVE_WORD(runtime, "throw", word_throw);
+
+        // Equality words.
+        ADD_NATIVE_WORD(runtime, "=", word_equal);
+        ADD_NATIVE_WORD(runtime, ">=", word_greater_equal);
+        ADD_NATIVE_WORD(runtime, "<=", word_less_equal);
+        ADD_NATIVE_WORD(runtime, ">", word_greater);
+        ADD_NATIVE_WORD(runtime, "<", word_less);
+
+        // Special value words.
+        ADD_NATIVE_WORD(runtime, "none", word_none);
+        ADD_NATIVE_WORD(runtime, "true", word_true);
+        ADD_NATIVE_WORD(runtime, "false", word_false);
+        ADD_NATIVE_WORD(runtime, "unique_str", word_unique_str);
     }
 
 

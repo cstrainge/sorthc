@@ -82,10 +82,28 @@ namespace sorthc::compilation::run_time
             bool get_bool(const CompilerRuntime& runtime) const;
             const std::string& get_string(const CompilerRuntime& runtime) const;
             const byte_code::ByteCode& get_byte_code(const CompilerRuntime& runtime) const;
+
+        private:
+            friend std::strong_ordering operator <=>(const Value& lhs, const Value& rhs) noexcept;
     };
 
 
     std::ostream& operator <<(std::ostream& stream, const Value& value) noexcept;
+
+
+    std::strong_ordering operator <=>(const Value& lhs, const Value& rhs) noexcept;
+
+
+    inline bool operator ==(const Value& lhs, const Value& rhs) noexcept
+    {
+        return lhs <=> rhs == std::strong_ordering::equal;
+    }
+
+
+    inline bool operator !=(const Value& lhs, const Value& rhs) noexcept
+    {
+        return lhs <=> rhs != std::strong_ordering::equal;
+    }
 
 
     // Return a string value, but convert the value to a string if it is not a string.  Also enclose

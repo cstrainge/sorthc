@@ -106,21 +106,6 @@ add_dependencies(${PROJECT_NAME} ${SORTH_RUNTIME_NAME})
 
 
 
-# Enable link-time optimization if we're in release mode and it's supported.
-#include(CheckIPOSupported)
-#
-#if (CMAKE_BUILD_TYPE STREQUAL "Release")
-#    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_output)
-#    if(ipo_supported)
-#        message(STATUS "IPO/LTO is supported: enabling for Release build.")
-#        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-#    else()
-#        message(status "IPO/LTO not supported: ${ipo_output}")
-#    endif()
-#endif()
-
-
-
 # Custom target to copy the standard library
 add_custom_target(copy_stdlib ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/std.f ${DIST_DIR}/std.f

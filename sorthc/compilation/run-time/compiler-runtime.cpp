@@ -172,7 +172,6 @@ namespace sorthc::compilation::run_time
                                    WordType type,
                                    WordContextManagement context_management)
     {
-        std::cout << "Adding word: " << info.name << std::endl;
         dictionary.insert(info.name,
                           Word(execution_context,
                                type,
