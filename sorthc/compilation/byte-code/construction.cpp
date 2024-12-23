@@ -23,6 +23,17 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    Construction::Construction(const source::Location& location,
+                               const std::string& name,
+                               const ByteCode&& code) noexcept
+    : Construction()
+    {
+        this->location = location;
+        this->name = name;
+        this->code = std::move(code);
+    }
+
+
     Construction::Construction(const ByteCode&& code) noexcept
     : Construction()
     {

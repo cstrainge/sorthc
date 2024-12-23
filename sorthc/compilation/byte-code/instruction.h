@@ -70,4 +70,25 @@ namespace sorthc::compilation::byte_code
     using ByteCode = std::vector<Instruction>;
 
 
+    std::ostream& operator <<(std::ostream& stream, const Instruction::Id& id);
+
+
+    std::ostream& operator <<(std::ostream& stream, const Instruction& instruction);
+
+
+    void pretty_print(std::ostream& stream,
+                      run_time::CompilerRuntime& runtime,
+                      const ByteCode& code);
+
+
+    inline std::string pretty_print(run_time::CompilerRuntime& runtime, const ByteCode& code)
+    {
+        std::stringstream stream;
+
+        pretty_print(stream, runtime, code);
+
+        return stream.str();
+    }
+
+
 }

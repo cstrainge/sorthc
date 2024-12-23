@@ -85,4 +85,15 @@ namespace sorthc::compilation::run_time
     };
 
 
+    std::ostream& operator <<(std::ostream& stream, const Value& value) noexcept;
+
+
+    // Return a string value, but convert the value to a string if it is not a string.  Also enclose
+    // the string in quotes, and will escape any characters that need to be escaped.
+    std::string stringify(const Value& value) noexcept;
+
+    // Enclose a string in quotes and escape any characters that need to be escaped.
+    std::string stringify(const std::string& value) noexcept;
+
+
 }

@@ -53,7 +53,7 @@ namespace sorthc::compilation::run_time
 
     // Stack of call stack items, used to track the execution of Forth words by the compiler
     // run-time.
-    using CallStack = std::stack<CallStackItem>;
+    using CallStack = std::list<CallStackItem>;
 
 
     // Definition of the variable list used by the runtime to store variables that are defined
@@ -121,6 +121,8 @@ namespace sorthc::compilation::run_time
             // Get the current source code location the compiler is at.
             const source::Location& get_location() const noexcept;
             void set_location(const source::Location& value) noexcept;
+
+            const CallStack& get_call_stack() const noexcept;
 
             // Get the cache of compiled scripts.
             const ScriptCache& get_script_cache() const noexcept;

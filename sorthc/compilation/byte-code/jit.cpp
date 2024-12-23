@@ -110,17 +110,54 @@ namespace sorthc::compilation::byte_code
     {
         std::cout << "JIT compiling script: " << script.get_script_path() << std::endl;
 
+        // JIT compile and register all of the words in the script with the run-time.
         for (const auto& [ name, word_construction ] : script.get_words())
         {
             jit_compile(runtime, word_construction);
         }
 
-        auto null_handler = [](run_time::CompilerRuntime&) -> void
-            {
-                // Do nothing.
-            };
+        // Get the script's top level code.
+        const auto& top_level = script.get_top_level();
+        /* = byte_code::Construction(source::Location(script.get_script_path()),
+                                                    script.get_script_path(),
+                                                    std::move(script.get_top_level()));*/
 
-        return null_handler;
+        // If there is no top level code, just return a handler that does nothing.
+        if (top_level.empty())
+        {
+            auto null_handler = [](run_time::CompilerRuntime&) -> void
+                {
+                    // Do nothing.
+                };
+
+            return null_handler;
+        }
+
+        // Make sure we have a name for the word that's usable for the JIT engine.
+        auto filtered_name = filter_word_name(script.get_script_path().string());
+
+        // Create the context for this compilation.
+        auto [ module, context ] = create_jit_module_context(filtered_name);
+
+        // Jit compile the word and then finalize it's module.
+        auto [ locations, constants ] = jit_compile_word(runtime,
+                                                         module,
+                                                         context,
+                                                         filtered_name,
+                                                         top_level,
+                                                         CodeGenType::script_body);
+
+        // JIT compile and optimize the module, returning the IR for the word.
+        auto ir_map = finalize_module(std::move(module), std::move(context));
+
+        // Create the top level code handler for the script and return it to the caller.
+        auto handler = create_word_function(filtered_name,
+                                            std::move(ir_map[filtered_name]),
+                                            std::move(locations),
+                                            std::move(constants),
+                                            CodeGenType::word);
+
+        return handler;
     }
 
 
@@ -266,7 +303,8 @@ namespace sorthc::compilation::byte_code
     {
         // Gather up our basic types needed for the function signatures.
         auto void_type = llvm::Type::getVoidTy(*context.get());
-        auto ptr_type = llvm::PointerType::getUnqual(void_type);
+        auto int8_type = llvm::Type::getInt8Ty(*context.get());
+        auto ptr_type = llvm::PointerType::getUnqual(int8_type);
         auto int64_type = llvm::Type::getInt64Ty(*context.get());
         auto bool_type = llvm::Type::getInt1Ty(*context.get());
         auto bool_ptr_type = llvm::PointerType::getUnqual(bool_type);
@@ -567,7 +605,8 @@ namespace sorthc::compilation::byte_code
 
         // Gather up our basic types, and then create the function type for the JITed code.
         auto void_type = llvm::Type::getVoidTy(*context.get());
-        auto ptr_type = llvm::PointerType::getUnqual(void_type);
+        auto int8_type = llvm::Type::getInt8Ty(*context.get());
+        auto ptr_type = llvm::PointerType::getUnqual(int8_type);
 
         auto function_type = llvm::FunctionType::get(void_type,
                                                         { ptr_type, ptr_type, ptr_type },

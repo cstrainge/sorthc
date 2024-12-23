@@ -13,6 +13,8 @@ namespace sorthc::compilation::byte_code
       tokens(std::move(tokens)),
       current_token(0)
     {
+        // Create a new construction for the top level code.
+        new_construction();
     }
 
 
@@ -43,7 +45,7 @@ namespace sorthc::compilation::byte_code
     void Context::compile_token(const source::Token& token)
     {
         auto [ found, word ] = (   token.get_type() != source::Token::Type::string
-                                || token.get_type() != source::Token::Type::none)
+                                && token.get_type() != source::Token::Type::none)
                                ? runtime.find(token.get_as_word())
                                : std::tuple<bool, Word>(false, {});
 

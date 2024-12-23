@@ -141,9 +141,14 @@ int main(int argc, char* argv[])
         // Compile the source file, to the given output file.
         compiler.compile(argv[1], argv[2]);
     }
-    catch (const std::exception& error)
+    catch (const std::runtime_error& error)
     {
         std::cerr << error.what() << std::endl;
+        result = EXIT_FAILURE;
+    }
+    catch (...)
+    {
+        std::cerr << "An unknown error occurred." << std::endl;
         result = EXIT_FAILURE;
     }
 

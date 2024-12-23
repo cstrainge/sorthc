@@ -33,17 +33,13 @@ namespace sorthc::source
 
 
     Location::Location() noexcept
-    : file("<unknown>"),
-      line(1),
-      column(1)
+    : Location("<unknown>", 1, 1)
     {
     }
 
 
     Location::Location(const std::string& file) noexcept
-    : file(file),
-      line(1),
-      column(1)
+    : Location(file, 1, 1)
     {
     }
 
@@ -53,6 +49,7 @@ namespace sorthc::source
       line(line),
       column(column)
     {
+        std::replace(this->file.begin(), this->file.end(), '\\', '/');
     }
 
 

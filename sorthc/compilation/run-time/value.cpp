@@ -7,6 +7,85 @@ namespace sorthc::compilation::run_time
 {
 
 
+    std::ostream& operator <<(std::ostream& stream, const Value& value) noexcept
+    {
+        if (value.is_none())
+        {
+            stream << "none";
+        }
+        else if (value.is_int())
+        {
+            stream << value.get_int();
+        }
+        else if (value.is_double())
+        {
+            stream << value.get_double();
+        }
+        else if (value.is_bool())
+        {
+            stream << (value.get_bool() ? "true" : "false");
+        }
+        else if (value.is_string())
+        {
+            stream << value.get_string();
+        }
+        else if (value.is_byte_code())
+        {
+            stream << "<byte code>";
+        }
+
+        return stream;
+    }
+
+
+    // Return a string value, but convert the value to a string if it is not a string.  Also enclose
+    // the string in quotes, and will escape any characters that need to be escaped.
+    std::string stringify(const Value& value) noexcept
+    {
+        std::stringstream stream;
+
+        stream << value;
+
+        return stringify(stream.str());
+    }
+
+    // Enclose a string in quotes and escape any characters that need to be escaped.
+    std::string stringify(const std::string& value) noexcept
+    {
+        std::stringstream output;
+
+        output << "\"";
+
+        for (size_t i = 0; i < value.size(); ++i)
+        {
+            char next = value[i];
+
+            switch (next)
+            {
+                case '\r': output << "\\r";  break;
+                case '\n': output << "\\n";  break;
+                case '\t': output << "\\n";  break;
+                case '\"': output << "\\\""; break;
+
+                default:
+                    if (!isprint(next))
+                    {
+                        output << "\\0" << (int)next;
+                    }
+                    else
+                    {
+                        output << next;
+                    }
+                    break;
+            }
+        }
+
+        output << "\"";
+
+        return output.str();
+    }
+
+
     Value::Value()
     : value(None())
     {

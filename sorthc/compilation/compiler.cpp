@@ -23,7 +23,18 @@ namespace sorthc::compilation
                            const std::filesystem::path& output_path)
     {
         // Ask the runtime to byte-code compile the script.
-        // runtime.compile_script(source_path);
+        auto script = runtime.compile_script(source_path);
+
+        for (const auto& word : script.get_words())
+        {
+            std::cout << "Word: " << word.first << std::endl
+                      << pretty_print(runtime, word.second.get_code())
+                      << std::endl;
+        }
+
+        std::cout << "<top-level>" << std::endl
+                  << pretty_print(runtime, script.get_top_level())
+                  << std::endl;
 
         // Now that the script is compiled, we can generate the LLVM IR for it.
         // generate_llvm_ir(runtime.get_script_cache(), source_path);

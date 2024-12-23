@@ -32,12 +32,6 @@
 
 
 
-: sentinel_word hidden
-    "The word " swap + " should not be run directly outside of it's syntax." + throw
-;
-
-
-
 : mark_context immediate description: "Create a new variable and word context."
                          signature: " -- "
     op.mark_context
@@ -103,10 +97,3 @@
     code.merge_stack_block
 ;
 
-: else immediate description: "Define an else clause for an if statement."
-    "else" sentinel_word
-;
-
-: then immediate description: "End of an if/else/then block."
-    "then" sentinel_word
-;

@@ -37,6 +37,9 @@ namespace sorthc::compilation::byte_code
             Construction() noexcept;
             Construction(const source::Location& location, const std::string& name) noexcept;
             Construction(const ByteCode&& code) noexcept;
+            Construction(const source::Location& location,
+                         const std::string& name,
+                         const ByteCode&& code) noexcept;
             Construction(const Construction& other) noexcept = default;
             Construction(Construction&& other) noexcept = default;
 

@@ -31,6 +31,10 @@ namespace sorthc::compilation::run_time
         // automaticaly be added to the run-time's dictionary.
         auto top_level = byte_code::get_jit_engine().jit_compile(*this, std_lib);
         top_level(*this);
+
+        // Now that we've JIT compiled the essential words, we can load the rest of the standard
+        // library.
+        compile_script("std.f");
     }
 
 
@@ -43,6 +47,12 @@ namespace sorthc::compilation::run_time
     void CompilerRuntime::set_location(const source::Location& value) noexcept
     {
         location = value;
+    }
+
+
+    const CallStack& CompilerRuntime::get_call_stack() const noexcept
+    {
+        return call_stack;
     }
 
 
@@ -379,7 +389,7 @@ namespace sorthc::compilation::run_time
     void CompilerRuntime::call_stack_push(const std::string& name,
                                           const source::Location& location) noexcept
     {
-        call_stack.push({ .location = location, .name = name });
+        call_stack.push_front({ .location = location, .name = name });
     }
 
 
@@ -387,7 +397,7 @@ namespace sorthc::compilation::run_time
     {
         throw_error_if(call_stack.empty(), *this, "Call stack underflow.");
 
-        call_stack.pop();
+        call_stack.pop_front();
     }
 
 
