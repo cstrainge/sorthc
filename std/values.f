@@ -83,7 +83,7 @@
 
 
 
-: <> description: "Compare two values for unequality."
+: <> description: "Compare two values for inequality."
      signature: "a b -- are-not-equal?"
     = '
 ;

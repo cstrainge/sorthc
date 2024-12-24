@@ -5,8 +5,19 @@
         "CGSCC",
         "cgsccam",
         "doesnt",
+        "fexceptions",
         "LLJIT",
         "sorthc",
         "Unqual"
+    ],
+    "cmake.additionalCompilerSearchDirs": [
+        "C:\\Users\\nullp\\software\\llvm-install\\19.1.5\\bin"
+    ],
+    "cmake.configureArgs": [
+        "-DLLVM_DIR=C:/Users/nullp/software/llvm-install/19.1.5/lib/cmake/llvm",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_C_COMPILER=clang",
+        "-DCMAKE_CXX_COMPILER=clang++",
+        "-G Ninja"
     ]
 }

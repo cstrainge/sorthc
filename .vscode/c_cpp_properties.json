@@ -21,7 +21,9 @@
                 "${workspaceFolder}/sorthc/compilation/byte-code/**",
                 "${workspaceFolder}/sorthc/compilation/run-time/**",
 
-                "${workspaceFolder}/sorth-runtime/**"
+                "${workspaceFolder}/sorth-runtime/**",
+
+                "C:\\Users\\nullp\\software\\llvm-install\\19.1.5\\include"
             ],
 
             "defines":

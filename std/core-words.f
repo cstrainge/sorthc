@@ -658,7 +658,7 @@
         while
             index_count @ index_blocks []@@ code.push_stack_block
 
-            code.stack-block-size@ 0>
+            code.stack-block-size@ 0 >
             if
                 true code.insert_at_front
                 "dup" op.execute
