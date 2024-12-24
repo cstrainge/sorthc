@@ -42,7 +42,7 @@ declare void @_free_value_data(%struct.Value*)
 
 ; Push a value onto the data stack.  The value data is shallow copied.  Return 0 on success, 1 on
 ; stack overflow.
-define i8 push_value(%struct.Value* %value)
+define i8 @push_value(%struct.Value* %value)
 {
         ; Get the current stack information.
         %index = load i64, i64* @StackPointer, align 8
@@ -66,8 +66,18 @@ define i8 push_value(%struct.Value* %value)
                                            i64 %new_index
 
         ; Get the type and data from the source value.
-        %type = extractvalue %struct.Value %value, 0
-        %data = extractvalue %struct.Value %value, 1
+        %type_ptr =  getelementptr inbounds %struct.Value,
+                                            %struct.Value* %value,
+                                            i32 0,
+                                            i32 0
+
+        %data_ptr = getelementptr inbounds %struct.Value,
+                                           %struct.Value* %value,
+                                           i32 0,
+                                           i32 1
+
+        %type = load i64, i64* %type_ptr, align 8
+        %data = load [ 8 x i8 ], [ 8 x i8 ]* %data_ptr, align 8
 
         ; Get the addresses of the destination type and data.
         %dest_type_ptr = getelementptr inbounds %struct.Value,
@@ -96,7 +106,7 @@ define i8 push_value(%struct.Value* %value)
 
 ; Pop a value from the data stack, again the value data is shallow copied.  Return 0 on success, 1
 ; on stack underflow.
-define i8 pop_value(%struct.Value* %output_value)
+define i8 @pop_value(%struct.Value* %output_value)
 {
         ; Check to see if the stack is empty, that is the stack pointer > -1.
         %index = load i64, i64* @StackPointer, align 8
