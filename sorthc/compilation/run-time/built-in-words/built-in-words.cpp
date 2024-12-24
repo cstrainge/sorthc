@@ -896,6 +896,28 @@ namespace sorthc::compilation::run_time::built_in_words
         }
 
 
+        void word_sorth_os(CompilerRuntime& runtime)
+        {
+            #if (IS_WINDOWS == 1)
+
+                runtime.push("Windows");
+
+            #elif (IS_UNIX == 1)
+
+                runtime.push("Linux");
+
+            #elif (IS_MACOS == 1)
+
+                runtime.push("macOS");
+
+            #else
+
+                runtime.push("Unknown");
+
+            #endif
+        }
+
+
     }
 
 
@@ -997,6 +1019,7 @@ namespace sorthc::compilation::run_time::built_in_words
         ADD_NATIVE_WORD(runtime, "true", word_true);
         ADD_NATIVE_WORD(runtime, "false", word_false);
         ADD_NATIVE_WORD(runtime, "unique_str", word_unique_str);
+        ADD_NATIVE_WORD(runtime, "sorth.os", word_sorth_os);
     }
 
 

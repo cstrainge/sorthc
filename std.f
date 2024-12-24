@@ -31,8 +31,3 @@
 
 ( Include some useful words for accessing the user's environment. )
 [include] std/user.f
-
-
-
-( Words for working with JSON. )
-[include] std/json.f

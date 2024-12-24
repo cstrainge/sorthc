@@ -525,224 +525,143 @@
 
 
 
-: []!! description: "Write a value at an index to the array variable."
-       signature: "new_value index array_variable -- "
-    @ []!
-;
-
-
-
-: []@@ description: "Read a value from an index from the array variable."
-       signature: "index array_variable -- value"
-    @ []@
-;
-
-
-
-: [].size@@ description: "Read the array variable's current size."
-            signature: "array_variable -- size"
-    @ [].size@
-;
-
-
-
-: [].size!! description: "Shrink or grow the array variable to the given size."
-            signature: "new_size array_variable -- "
-    @ [].size!
-;
-
-
-
-: [].size++!  description: "Grow an array by one item."
-              signature: "array -- "
-    variable! the_array
-
-    the_array [].size@@ ++ the_array [].size!!
-;
-
-
-
-: [].size++!!  description: "Grow an array variable by one item."
-               signature: "array_variable -- "
-    @ variable! the_array
-
-    the_array [].size@@ ++ the_array [].size!!
-;
-
-
-
-: [].size--!!  description: "Shrink an array variable by one item."
-               signature: "array_variable -- "
-    @ variable! the_array
-
-    the_array [].size@@ -- the_array [].size!!
-;
-
-
-
-: [].push_front!! description: "Push a new value to the top of an array variable."
-                  signature: "value array_variable -- "
-    @ [].push_front!
-;
-
-
-
-: [].push_back!! description: "Push a new value to the end of an array variable."
-                  signature: "value array_variable -- "
-    @ [].push_back!
-;
-
-
-
-: [].pop_front!! description: "Pop a value from the top of an array variable."
-                  signature: "array_variable -- value"
-    @ [].pop_front!
-;
-
-
-
-: [].pop_back!! description: "Pop a value from the bottom of an array variable."
-                  signature: "array_variable -- value"
-    @ [].pop_back!
-;
-
-
-
-: [ immediate
-    description: "Define 'array [ index or indices ]' access or `[ value , ... ]` creation."
-    signature: "array [ <index> ]<operation> *or* [ <value_list> ]"
-
-    1 variable! index_count
-    1 [].new variable! index_blocks
-
-    variable command
-
-    false variable! found_end_bracket
-    true variable! is_writing
-    false variable! is_creating
+( A try/catch block for exception handling. )
+: try immediate description: "Define the try/catch/endcatch syntax."
+                signature: "try <code> catch <code> endcatch"
+    unique_str variable! catch_label
+    unique_str variable! end_catch_label
 
     code.new_block
 
-    begin
-        "," "]!" "]!!" "]@" "]@@" "]" 6 code.compile_until_words
+    catch_label @ op.mark_catch
+    "catch" 1 code.compile_until_words
+    drop
 
-        code.pop_stack_block index_count @ 1 - index_blocks []!!
+    op.unmark_catch
+    end_catch_label @ op.jump
 
-        case
-            "," of
-                index_count @ 1 +  index_count !
+    catch_label @ op.jump_target
+    "endcatch" 1 code.compile_until_words
+    drop
 
-                code.new_block
-                index_count @ index_blocks [].size!!
-            endof
+    end_catch_label @ op.jump_target
 
-            "]"   of  "[].new" command !    true found_end_bracket !  true is_creating !  endof
-            "]!"  of  "[]!"    command !    true found_end_bracket !                      endof
-            "]!!" of  "[]!!"   command !    true found_end_bracket !                      endof
-            "]@"  of  "[]@"    command !    true found_end_bracket !  false is_writing !  endof
-            "]@@" of  "[]@@"   command !    true found_end_bracket !  false is_writing !  endof
-        endcase
+    code.resolve_jumps
+    code.merge_stack_block
+;
 
-        found_end_bracket @
-    until
 
-    is_creating @
+
+: catch immediate description: "End of the try block, starts the catch block."
+    "catch" sentinel_word
+;
+
+
+
+: endcatch immediate description: "End of the total try/catch/endcatch block."
+    "endcatch" sentinel_word
+;
+
+
+
+( Given an array and an operator go through the array and select out one of the values using that )
+( operator. )
+: one_of hidden  ( array operator -- chosen-value )
+    variable! operator
+    variable! values
+
+    values [].size@@ constant size
+
+    size  0<=
     if
-        index_count @ op.push_constant_value
-        command @ op.execute
-
-        0 index_count !
-
-        begin
-            index_count @ index_blocks [].size@@ <
-        while
-            index_count @ index_blocks []@@ code.push_stack_block
-
-            code.stack-block-size@ 0 >
-            if
-                true code.insert_at_front
-                "dup" op.execute
-                false code.insert_at_front
-
-                "swap" op.execute
-                index_count @ op.push_constant_value
-                "swap" op.execute
-                "[]!" op.execute
-            then
-
-            code.merge_stack_block
-            index_count @ 1 + index_count !
-        repeat
-    else
-        index_count @ 1 =
-        if
-            0 index_blocks []@@ code.push_stack_block
-
-            "swap" op.execute
-            command @ op.execute
-
-            code.merge_stack_block
-        else
-            index_count @ 1 - variable! i
-
-            begin
-                i @ index_blocks []@@ code.push_stack_block
-
-                is_writing @
-                if
-                    true code.insert_at_front
-                    "over" op.execute
-                    false code.insert_at_front
-                else
-                    true code.insert_at_front
-                    "dup" op.execute
-                    false code.insert_at_front
-                then
-
-                "swap" op.execute
-                command @ op.execute
-
-                is_writing @ true <>
-                if
-                    "swap" op.execute
-                then
-
-                code.merge_stack_block
-
-                i @ 1 - i !
-                i @ 0<
-            until
-            "drop" op.execute
-        then
+        "No values in array." throw
     then
+
+    values [ 0 ]@@ variable! chosen
+    1 variable! index
+
+    begin
+        index @  size  <
+    while
+        values [ index @ ]@@ dup  chosen @  operator @ execute
+        if
+            chosen !
+        else
+            drop
+        then
+
+        index ++!
+    repeat
+
+    chosen @
 ;
 
 
 
-: , immediate description: "Separator in the [ index , ... ] and { key -> value , ... } syntaxes."
-    "," sentinel_word
+: min_of description: "Get the minimum of an array of values."
+         signature: "array -- smallest-value"
+    ` < one_of
 ;
 
 
 
-: ]! immediate description: "End of the [ index ] syntax.  Indicates an array write."
-    "]!" sentinel_word
+: max_of description: "Get the maximum of an array of values."
+         signature: "array -- smallest-value"
+    ` > one_of
 ;
 
 
 
-: ]!! immediate description: "End of the [ index ] syntax.  Indicates a an array variable write."
-    "]!!" sentinel_word
+: min description: "Get the minimum of two values."
+      signature: "a b -- [a or b]"
+    variable! b
+    variable! a
+
+    [ a @ , b @ ]  ` <  one_of
 ;
 
 
 
-: ]@ immediate description: "End of the [ index ] syntax.  Indicates an array read."
-    "]@" sentinel_word
+: max description: "Get the maximum of two values."
+      signature: "a b -- [a or b]"
+    variable! b
+    variable! a
+
+    [ a @ , b @ ]  ` >  one_of
 ;
 
 
 
-: ]@@ immediate description: "End of the [ index ] syntax.  Indicates an array variable read."
-    "]@@" sentinel_word
+: [&&] immediate  description: "Evaluate && at compile time."
+                  signature: "a b -- result"
+    &&
+;
+
+
+
+: [||] immediate  description: "Evaluate || at compile time."
+                  signature: "a b -- result"
+    ||
+;
+
+
+
+( If we have the user environment available, include some more useful words. )
+: [is-windows?] immediate description: "Evaluate at compile time, is the OS Windows?"
+                          signature: " -- bool"
+    sorth.os  "Windows"  =
+;
+
+
+
+: [is-macos?] immediate description: "Evaluate at compile time, is the OS macOS?"
+                        signature: " -- bool"
+    sorth.os  "macOS"  =
+;
+
+
+
+: [is-linux?] immediate description: "Evaluate at compile time, is the OS Linux?"
+                        signature: " -- bool"
+    sorth.os  "Linux"  =
 ;
