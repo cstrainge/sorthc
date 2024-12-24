@@ -5,12 +5,21 @@
 ; data stack and it's supporting functions.
 
 
+; The run-time's reference counted data type, how the raw data pointer is interpreted is based on
+; the host Value's type.
+%struct.ValueReferenceData = type
+{
+    i64,        ; The reference count.
+    i8*         ; The data pointer.
+}
+
+
 
 ; The run-time's basic value type.
 %struct.Value = type
 {
-    i64,        ; The type of the value.
-    [ 8 x i8 ]  ; The data value itself, can be either a pointer, a bool, an int64 or a f64.
+    i64,         ; The type of the value.
+    [ 16 x i8 ]  ; The data value itself, can be either a pointer, a bool, an int64 or a f64.
 }
 
 
@@ -89,7 +98,7 @@ define i8 @push_value(%struct.Value* %value)
 
         ; Load the type and data from the source value.
         %source_type = load i64, i64* %source_type_ptr, align 8
-        %source_data = load [ 8 x i8 ], [ 8 x i8 ]* %source_data_ptr, align 8
+        %source_data = load [ 16 x i8 ], [ 16 x i8 ]* %source_data_ptr, align 8
 
         ; Get the addresses of the destination type and data.
         %dest_type_ptr = getelementptr inbounds %struct.Value,
@@ -104,7 +113,7 @@ define i8 @push_value(%struct.Value* %value)
 
         ; Copy the type and data to the stack.
         store i64 %source_type, i64* %dest_type_ptr, align 8
-        store [ 8 x i8 ] %source_data, [ 8 x i8 ]* %dest_data_ptr, align 8
+        store [ 16 x i8 ] %source_data, [ 16 x i8 ]* %dest_data_ptr, align 8
 
         ; Success!
         ret i8 0
@@ -150,7 +159,7 @@ define i8 @pop_value(%struct.Value* %output_value)
 
         ; Get the type and data from the source value.
         %src_type = load i64, i64* %source_type_ptr, align 8
-        %src_data = load [ 8 x i8 ], [ 8 x i8 ]* %source_data_ptr, align 8
+        %src_data = load [ 16 x i8 ], [ 16 x i8 ]* %source_data_ptr, align 8
 
         ; Get the destination pointers.
         %dest_type_ptr = getelementptr inbounds %struct.Value,
@@ -165,7 +174,7 @@ define i8 @pop_value(%struct.Value* %output_value)
 
         ; Copy the type and data to the output value.
         store i64 %src_type, i64* %dest_type_ptr, align 8
-        store [ 8 x i8 ] %src_data, [ 8 x i8 ]* %dest_data_ptr, align 8
+        store [ 16 x i8 ] %src_data, [ 16 x i8 ]* %dest_data_ptr, align 8
 
         ; Decrement the stack pointer.
         %new_index = sub i64 %index, 1
