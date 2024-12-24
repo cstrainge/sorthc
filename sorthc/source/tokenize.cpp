@@ -88,6 +88,14 @@ namespace sorthc::source
                     next = '\t';
                     break;
 
+                case '\\':
+                    next = '\\';
+                    break;
+
+                case '"':
+                    next = '"';
+                    break;
+
                 // Process the numeric escape character, convert a numeric value into a character.
                 // We only handle values from 0 to 255, and we don't process hex or octal here.
                 // Floating point literals are also invalid here.
@@ -127,7 +135,13 @@ namespace sorthc::source
 
                 // Looks like an unsupported escape character.
                 default:
-                    throw_error(source.get_location(), "Unsupported escape character.");
+                    {
+                        std::stringstream stream;
+
+                        stream << "Unsupported escape character " << next << ".";
+
+                        throw_error(source.get_location(), stream.str());
+                    }
                     break;
             }
 

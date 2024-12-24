@@ -138,11 +138,13 @@ namespace sorthc::compilation::run_time
 
         auto sub_scripts = std::move(get_compile_context().take_sub_scripts());
         auto words = std::move(get_compile_context().take_words());
+        auto structures = std::move(get_compile_context().take_structure_types());
         auto code = std::move(construction.take_code());
 
         auto script = std::make_shared<byte_code::Script>(std::move(sub_scripts),
                                                           std::move(full_path),
                                                           std::move(words),
+                                                          std::move(structures),
                                                           std::move(code));
 
         // Cache the script, and return a reference to the new script.
@@ -336,6 +338,12 @@ namespace sorthc::compilation::run_time
     std::string CompilerRuntime::pop_as_string()
     {
         return pop().get_string(*this);
+    }
+
+
+    ArrayPtr CompilerRuntime::pop_as_array()
+    {
+        return pop().get_array(*this);
     }
 
 

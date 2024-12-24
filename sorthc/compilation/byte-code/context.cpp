@@ -9,6 +9,10 @@ namespace sorthc::compilation::byte_code
 
     Context::Context(run_time::CompilerRuntime& runtime, source::TokenList&& tokens) noexcept
     : runtime(runtime),
+      sub_scripts(),
+      constructions(),
+      words(),
+      structure_types(),
       insertion_point(CodeInsertionPoint::end),
       tokens(std::move(tokens)),
       current_token(0)
@@ -47,6 +51,12 @@ namespace sorthc::compilation::byte_code
     }
 
 
+    void Context::add_script_structure(const StructureType& structure)
+    {
+        structure_types.push_back(structure);
+    }
+
+
     const SubScriptList& Context::get_sub_scripts() const noexcept
     {
         return sub_scripts;
@@ -56,6 +66,18 @@ namespace sorthc::compilation::byte_code
     SubScriptList&& Context::take_sub_scripts() noexcept
     {
         return std::move(sub_scripts);
+    }
+
+
+    const StructureTypeList& Context::get_structure_types() const noexcept
+    {
+        return structure_types;
+    }
+
+
+    StructureTypeList&& Context::take_structure_types() noexcept
+    {
+        return std::move(structure_types);
     }
 
 

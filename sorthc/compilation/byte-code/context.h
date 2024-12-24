@@ -48,6 +48,9 @@ namespace sorthc::compilation::byte_code
             // List of words that have been defined in the script.
             ConstructionList words;
 
+            // The list of structure types that have been defined in the script.
+            StructureTypeList structure_types;
+
             // Where in the top construction's code the next instructions should be inserted.
             CodeInsertionPoint insertion_point;
 
@@ -77,8 +80,13 @@ namespace sorthc::compilation::byte_code
         public:
             void add_script_word(const Construction& word);
 
+            void add_script_structure(const StructureType& structure);
+
             const SubScriptList& get_sub_scripts() const noexcept;
             SubScriptList&& take_sub_scripts() noexcept;
+
+            const StructureTypeList& get_structure_types() const noexcept;
+            StructureTypeList&& take_structure_types() noexcept;
 
         public:
             // Compile the context into byte-code instructions.

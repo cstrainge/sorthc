@@ -23,6 +23,10 @@ namespace sorthc::compilation::byte_code
     using WordMap = std::unordered_map<std::string, size_t>;
 
 
+    class StructureType;
+    using StructureTypeList = std::vector<StructureType>;
+
+
     class Script : public std::enable_shared_from_this<Script>
     {
         private:
@@ -35,6 +39,9 @@ namespace sorthc::compilation::byte_code
             // The list of words that have been defined in the script.
             ConstructionList words;
 
+            // The list of structure types that have been defined in the script.
+            StructureTypeList structure_types;
+
             // A map of word names to their index in the words list.
             WordMap word_map;
 
@@ -46,6 +53,7 @@ namespace sorthc::compilation::byte_code
             Script(SubScriptList&& sub_scripts,
                    std::filesystem::path&& script_path,
                    ConstructionList&& words,
+                   StructureTypeList&& structure_types,
                    ByteCode&& top_level) noexcept;
             Script(const Script& script) = default;
             Script(Script&& script) = default;
@@ -62,6 +70,8 @@ namespace sorthc::compilation::byte_code
 
             const ConstructionList& get_words() const noexcept;
             const Construction& get_word(const std::string& name) const;
+
+            const StructureTypeList& get_structure_types() const noexcept;
 
             const ByteCode& get_top_level() const noexcept;
     };

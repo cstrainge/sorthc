@@ -265,19 +265,9 @@ namespace sorthc::compilation::run_time::built_in_words
         void word_word_index(CompilerRuntime& runtime)
         {
             auto name = runtime.get_compile_context().get_next_token().get_as_word();
-            auto [ found, word ] = runtime.find(name);
 
-            if (found)
-            {
-                runtime.get_compile_context()
-                       .insert_instruction(byte_code::Instruction::Id::push_constant_value,
-                                           (int64_t)word.get_handler_index());
-            }
-            else
-            {
-                runtime.get_compile_context()
-                       .insert_instruction(byte_code::Instruction::Id::word_index, name);
-            }
+            runtime.get_compile_context()
+                   .insert_instruction(byte_code::Instruction::Id::word_index, name);
         }
 
 
@@ -407,7 +397,7 @@ namespace sorthc::compilation::run_time::built_in_words
             // When should this word be executed?
             if (construction.get_execution_context() == WordExecutionContext::compile_time)
             {
-                // It's an immediate word, so compile it now and add it to the interpreter's
+                // It's an immediate word, so compile it now and add it to the runtime's
                 // run-time for running at compile time.
                 compilation::byte_code::get_jit_engine().jit_compile(runtime, construction);
             }
@@ -597,6 +587,284 @@ namespace sorthc::compilation::run_time::built_in_words
         }
 
 
+        void string_or_numeric_op(CompilerRuntime& runtime,
+                                  std::function<void(double, double)> dop,
+                                  std::function<void(int64_t, int64_t)> iop,
+                                  std::function<void(std::string, std::string)> sop)
+        {
+            auto b = runtime.pop();
+            auto a = runtime.pop();
+
+            if (Value::either_is_string(a, b))
+            {
+                sop(a.get_string(), b.get_string());
+            }
+            else if (Value::either_is_float(a, b))
+            {
+                dop(a.get_double(), b.get_double());
+            }
+            else if (Value::either_is_numeric(a, b))
+            {
+                iop(a.get_int(), b.get_int());
+            }
+            else
+            {
+                throw_error(runtime, "Expected string or numeric values.");
+            }
+        }
+
+
+        void math_op(CompilerRuntime& runtime,
+                     std::function<double(double, double)> dop,
+                     std::function<int64_t(int64_t, int64_t)> iop)
+        {
+            Value b = runtime.pop();
+            Value a = runtime.pop();
+            Value result;
+
+            if (Value::either_is_float(a, b))
+            {
+                result = dop(a.get_double(), b.get_double());
+            }
+            else if (Value::either_is_int(a, b))
+            {
+                result = iop(a.get_int(), b.get_int());
+            }
+            else
+            {
+                throw_error(runtime, "Expected numeric values.");
+            }
+
+            runtime.push(result);
+        }
+
+
+        void word_add(CompilerRuntime& runtime)
+        {
+            string_or_numeric_op(runtime,
+                                [&](auto a, auto b) { runtime.push(a + b); },
+                                [&](auto a, auto b) { runtime.push(a + b); },
+                                [&](auto a, auto b) { runtime.push(a + b); });
+        }
+
+
+        void word_subtract(CompilerRuntime& runtime)
+        {
+            math_op(runtime,
+                    [](auto a, auto b) -> auto { return a - b; },
+                    [](auto a, auto b) -> auto { return a - b; });
+        }
+
+
+        void word_multiply(CompilerRuntime& runtime)
+        {
+            math_op(runtime,
+                    [](auto a, auto b) -> auto { return a * b; },
+                    [](auto a, auto b) -> auto { return a * b; });
+        }
+
+
+        void word_divide(CompilerRuntime& runtime)
+        {
+            math_op(runtime,
+                    [](auto a, auto b) -> auto { return a / b; },
+                    [](auto a, auto b) -> auto { return a / b; });
+        }
+
+
+        void word_mod(CompilerRuntime& runtime)
+        {
+            auto b = runtime.pop_as_integer();
+            auto a = runtime.pop_as_integer();
+
+            runtime.push(a % b);
+        }
+
+
+        void word_data_definition(CompilerRuntime& runtime)
+        {
+            source::Location location = runtime.get_location();
+
+            bool found_initializers = runtime.pop_as_bool();
+            bool is_hidden = runtime.pop_as_bool();
+            ArrayPtr fields = runtime.pop_as_array();
+            std::string name = runtime.pop_as_string();
+            byte_code::ByteCode init_code;
+
+            if (found_initializers)
+            {
+                init_code = runtime.pop_as_byte_code();
+            }
+
+            std::vector<std::string> field_names;
+
+            field_names.reserve(fields->size());
+
+            for (size_t i = 0; i < fields->size(); ++i)
+            {
+                field_names.push_back((*fields)[i].get_string(runtime));
+            }
+
+            byte_code::StructureType type(location,
+                                          name,
+                                          is_hidden ? compilation::WordVisibility::hidden
+                                                    : compilation::WordVisibility::visible,
+                                          field_names,
+                                          init_code);
+
+            runtime.get_compile_context().add_script_structure(type);
+        }
+
+
+        void throw_if_out_of_bounds(CompilerRuntime& runtime,
+                                    int64_t index,
+                                    int64_t size,
+                                    const std::string& type)
+        {
+            if ((index >= size) || (index < 0))
+            {
+                std::stringstream stream;
+
+                stream << type << " index, " << index << ", is out of bounds of the size " << size
+                       << ".";
+
+                throw_error(runtime, stream.str());
+            }
+        }
+
+
+        void word_array_new(CompilerRuntime& runtime)
+        {
+            auto count = runtime.pop_as_size();
+            auto array_ptr = std::make_shared<Array>(count);
+
+            runtime.push(array_ptr);
+        }
+
+
+        void word_array_size(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+
+            runtime.push(array->size());
+        }
+
+
+        void word_array_write_index(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+            auto index = runtime.pop_as_size();
+            auto new_value = runtime.pop();
+
+            throw_if_out_of_bounds(runtime, index, array->size(), "Array");
+
+            (*array)[index] = new_value;
+        }
+
+
+        void word_array_read_index(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+            auto index = runtime.pop_as_size();
+
+            throw_if_out_of_bounds(runtime, index, array->size(), "Array");
+
+            runtime.push((*array)[index]);
+        }
+
+
+        void word_array_insert(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+            auto index = runtime.pop_as_size();
+            auto value = runtime.pop();
+
+            array->insert(index, value);
+        }
+
+
+        void word_array_delete(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+            auto index = runtime.pop_as_size();
+
+            throw_if_out_of_bounds(runtime, index, array->size(), "Array");
+
+            array->remove(index);
+        }
+
+
+        void word_array_resize(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+            auto new_size = runtime.pop_as_size();
+
+            array->resize(new_size);
+        }
+
+
+        void word_array_plus(CompilerRuntime& runtime)
+        {
+            auto array_src = runtime.pop_as_array();
+            auto array_dest = runtime.pop_as_array();
+
+            auto orig_size = array_dest->size();
+            auto new_size = orig_size + array_src->size();
+
+            array_dest->resize(new_size);
+
+            for (auto i = orig_size; i < new_size; ++i)
+            {
+                (*array_dest)[i] = (*array_src)[i - orig_size];
+            }
+
+            runtime.push(array_dest);
+        }
+
+
+        void word_array_compare(CompilerRuntime& runtime)
+        {
+            auto array_a = runtime.pop_as_array();
+            auto array_b = runtime.pop_as_array();
+
+            runtime.push(array_a == array_b);
+        }
+
+
+        void word_push_front(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+            auto value = runtime.pop();
+
+            array->push_front(value);
+        }
+
+
+        void word_push_back(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+            auto value = runtime.pop();
+
+            array->push_back(value);
+        }
+
+
+        void word_pop_front(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+
+            runtime.push(array->pop_front(runtime));
+        }
+
+
+        void word_pop_back(CompilerRuntime& runtime)
+        {
+            auto array = runtime.pop_as_array();
+
+            runtime.push(array->pop_back(runtime));
+        }
+
+
         void word_none(CompilerRuntime& runtime)
         {
             runtime.push(Value());
@@ -671,6 +939,7 @@ namespace sorthc::compilation::run_time::built_in_words
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[defined?]", word_is_defined_im);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[undefined?]", word_is_undefined_im);
 
+        // Stack manipulation words.
         ADD_NATIVE_WORD(runtime, "dup", word_dup);
         ADD_NATIVE_WORD(runtime, "drop", word_drop);
         ADD_NATIVE_WORD(runtime, "swap", word_swap);
@@ -697,6 +966,31 @@ namespace sorthc::compilation::run_time::built_in_words
         ADD_NATIVE_WORD(runtime, "<=", word_less_equal);
         ADD_NATIVE_WORD(runtime, ">", word_greater);
         ADD_NATIVE_WORD(runtime, "<", word_less);
+
+        // Math words.
+        ADD_NATIVE_WORD(runtime, "+", word_add);
+        ADD_NATIVE_WORD(runtime, "-", word_subtract);
+        ADD_NATIVE_WORD(runtime, "*", word_multiply);
+        ADD_NATIVE_WORD(runtime, "/", word_divide);
+        ADD_NATIVE_WORD(runtime, "%", word_mod);
+
+        // Define new structures.
+        ADD_NATIVE_IMMEDIATE_WORD(runtime, "#", word_data_definition);
+
+        // Array words.
+        ADD_NATIVE_WORD(runtime, "[].new", word_array_new);
+        ADD_NATIVE_WORD(runtime, "[].size@", word_array_size);
+        ADD_NATIVE_WORD(runtime, "[]!", word_array_write_index);
+        ADD_NATIVE_WORD(runtime, "[]@", word_array_read_index);
+        ADD_NATIVE_WORD(runtime, "[].insert", word_array_insert);
+        ADD_NATIVE_WORD(runtime, "[].delete", word_array_delete);
+        ADD_NATIVE_WORD(runtime, "[].size!", word_array_resize);
+        ADD_NATIVE_WORD(runtime, "[].+", word_array_plus);
+        ADD_NATIVE_WORD(runtime, "[].=", word_array_compare);
+        ADD_NATIVE_WORD(runtime, "[].push_front!", word_push_front);
+        ADD_NATIVE_WORD(runtime, "[].push_back!", word_push_back);
+        ADD_NATIVE_WORD(runtime, "[].pop_front!", word_pop_front);
+        ADD_NATIVE_WORD(runtime, "[].pop_back!", word_pop_back);
 
         // Special value words.
         ADD_NATIVE_WORD(runtime, "none", word_none);

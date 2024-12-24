@@ -10,10 +10,12 @@ namespace sorthc::compilation::byte_code
     Script::Script(SubScriptList&& sub_scripts,
                    std::filesystem::path&& script_path,
                    ConstructionList&& words,
+                   StructureTypeList&& structure_types,
                    ByteCode&& top_level) noexcept
     : sub_scripts(std::move(sub_scripts)),
       script_path(std::move(script_path)),
       words(std::move(words)),
+      structure_types(std::move(structure_types)),
       top_level(std::move(top_level)),
       word_map()
     {
@@ -52,6 +54,12 @@ namespace sorthc::compilation::byte_code
         }
 
         return words[found->second];
+    }
+
+
+    const StructureTypeList& Script::get_structure_types() const noexcept
+    {
+        return structure_types;
     }
 
 

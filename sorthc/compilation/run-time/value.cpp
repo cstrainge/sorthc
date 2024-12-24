@@ -176,6 +176,12 @@ namespace sorthc::compilation::run_time
     }
 
 
+    Value::Value(const ArrayPtr& value)
+    : value(value)
+    {
+    }
+
+
     Value::Value(const byte_code::ByteCode& value)
     : value(value)
     {
@@ -232,9 +238,39 @@ namespace sorthc::compilation::run_time
     }
 
 
+    bool Value::is_array() const noexcept
+    {
+        return std::holds_alternative<ArrayPtr>(value);
+    }
+
+
     bool Value::is_byte_code() const noexcept
     {
         return std::holds_alternative<byte_code::ByteCode>(value);
+    }
+
+
+    bool Value::either_is_numeric(const Value& a, const Value& b)
+    {
+        return a.is_numeric() || b.is_numeric();
+    }
+
+
+    bool Value::either_is_int(const Value& a, const Value& b)
+    {
+        return a.is_int() || b.is_int();
+    }
+
+
+    bool Value::either_is_float(const Value& a, const Value& b)
+    {
+        return a.is_double() || b.is_double();
+    }
+
+
+    bool Value::either_is_string(const Value& a, const Value& b)
+    {
+        return a.is_string() || b.is_string();
     }
 
 
@@ -294,6 +330,14 @@ namespace sorthc::compilation::run_time
         assert(is_string());
 
         return std::get<std::string>(value);
+    }
+
+
+    const ArrayPtr& Value::get_array() const
+    {
+        assert(is_array());
+
+        return std::get<ArrayPtr>(value);
     }
 
 
@@ -361,6 +405,14 @@ namespace sorthc::compilation::run_time
         throw_error_if(!is_string(), runtime, "Value is not a string.");
 
         return std::get<std::string>(value);
+    }
+
+
+    const ArrayPtr& Value::get_array(const CompilerRuntime& runtime) const
+    {
+        throw_error_if(!is_array(), runtime, "Value is not an array.");
+
+        return std::get<ArrayPtr>(value);
     }
 
 

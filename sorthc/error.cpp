@@ -9,7 +9,8 @@ namespace sorthc
 
     void throw_error(const std::string& message)
     {
-std::cout << "throw_error: " << message << std::endl;
+std::cout << message << std::endl;
+
         throw std::runtime_error(message);
     }
 

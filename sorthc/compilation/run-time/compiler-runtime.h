@@ -232,6 +232,9 @@ namespace sorthc::compilation::run_time
             // Pop a value from the data stack and convert it to a string.
             std::string pop_as_string();
 
+            // Pop a value from the data stack and convert it to an array.
+            ArrayPtr pop_as_array();
+
             // Pop a value from the data stack and convert it to a byte-code block.
             byte_code::ByteCode pop_as_byte_code();
 
