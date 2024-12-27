@@ -79,7 +79,10 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE "${SORTH_C_SRC_DIR}/sorthc.h")
 
 # Now add the sorth-runtime static library.
 set(SORTH_RUNTIME_DIR "${CMAKE_SOURCE_DIR}/sorth-runtime")
-file(GLOB SORTH_RUNTIME_SRCS "${SORTH_RUNTIME_DIR}/*.cpp")
+file(GLOB SORTH_RUNTIME_SRCS "${SORTH_RUNTIME_DIR}/*.cpp"
+                             "${SORTH_RUNTIME_DIR}/abi/*.cpp"
+                             "${SORTH_RUNTIME_DIR}/abi/words/*.cpp"
+                             "${SORTH_RUNTIME_DIR}/data-structures/*.cpp")
 
 add_library(${SORTH_RUNTIME_NAME} STATIC "${SORTH_RUNTIME_SRCS}")
 
@@ -102,8 +105,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${LLVM_LIBS})
 
 
 # Make sure the compiler target depends on the sorth-runtime target.
-add_dependencies(${PROJECT_NAME} ${SORTH_RUNTIME_NAME})
-
+target_link_libraries(${PROJECT_NAME} PRIVATE ${SORTH_RUNTIME_NAME})
 
 
 # Custom target to copy the standard library
