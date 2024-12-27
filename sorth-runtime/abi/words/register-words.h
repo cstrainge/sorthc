@@ -13,4 +13,8 @@ namespace sorth::run_time::abi::words
     void register_runtime_words(RuntimeWordRegistrar& registrar);
 
 
+    // Called at run-time to make the command line arguments available to the Forth program.
+    void register_command_line_arguments(int argc, char* argv[]);
+
+
 }

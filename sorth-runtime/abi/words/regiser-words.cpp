@@ -13,4 +13,11 @@ namespace sorth::run_time::abi::words
     }
 
 
+
+    void register_command_line_arguments(int argc, char* argv[])
+    {
+        //
+    }
+
+
 }
