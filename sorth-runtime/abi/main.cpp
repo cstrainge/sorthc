@@ -17,10 +17,12 @@ int main(int argc, char* argv[])
 
         result = script_top_level();
     }
-    catch(const std::exception& error)
+    catch (const std::exception& error)
     {
         std::cerr << "An unexpected error occured: " << std::endl
                   << error.what() << std::endl;
+
+        result = EXIT_FAILURE;
     }
 
     return result;
