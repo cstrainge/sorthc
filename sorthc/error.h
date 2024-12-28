@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc
+namespace sorth
 {
 
 

@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::compilation::run_time::built_in_words
+namespace sorth::compilation::run_time::built_in_words
 {
 
 

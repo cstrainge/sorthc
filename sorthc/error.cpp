@@ -3,14 +3,13 @@
 
 
 
-namespace sorthc
+namespace sorth
 {
 
 
     void throw_error(const std::string& message)
     {
-std::cout << message << std::endl;
-
+        std::cout << message << std::endl;
         throw std::runtime_error(message);
     }
 

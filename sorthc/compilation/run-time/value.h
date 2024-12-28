@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::compilation::byte_code
+namespace sorth::compilation::byte_code
 {
 
 
@@ -14,7 +14,7 @@ namespace sorthc::compilation::byte_code
 }
 
 
-namespace sorthc::compilation::run_time
+namespace sorth::compilation::run_time
 {
 
 

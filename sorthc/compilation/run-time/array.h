@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::compilation::run_time
+namespace sorth::compilation::run_time
 {
 
 

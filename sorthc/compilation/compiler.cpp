@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::compilation
+namespace sorth::compilation
 {
 
 
@@ -37,7 +37,7 @@ namespace sorthc::compilation
                   << std::endl;
 
         // Now that the script is compiled, we can generate the LLVM IR for it.
-        // generate_llvm_ir(runtime.get_script_cache(), source_path);
+        // generate_llvm_ir(script, source_path);
 
         // Finally, we can compile the LLVM IR into native code.
         // compile_native_code(output_path);

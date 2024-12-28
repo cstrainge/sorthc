@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::compilation::run_time
+namespace sorth::compilation::run_time
 {
 
 
@@ -279,10 +279,10 @@ namespace sorthc::compilation::run_time
                          __LINE__, \
                          1, \
                          handler, \
-                         sorthc::compilation::WordExecutionContext::run_time, \
-                         sorthc::compilation::WordVisibility::visible, \
-                         sorthc::compilation::WordType::internal, \
-                         sorthc::compilation::WordContextManagement::unmanaged)
+                         sorth::compilation::WordExecutionContext::run_time, \
+                         sorth::compilation::WordVisibility::visible, \
+                         sorth::compilation::WordType::internal, \
+                         sorth::compilation::WordContextManagement::unmanaged)
 
 
     // Called by C++ code to add a new immediate word to the compiler's runtime for access to other
@@ -293,10 +293,10 @@ namespace sorthc::compilation::run_time
                          __LINE__, \
                          1, \
                          handler, \
-                         sorthc::compilation::WordExecutionContext::compile_time, \
-                         sorthc::compilation::WordVisibility::visible, \
-                         sorthc::compilation::WordType::internal, \
-                         sorthc::compilation::WordContextManagement::unmanaged)
+                         sorth::compilation::WordExecutionContext::compile_time, \
+                         sorth::compilation::WordVisibility::visible, \
+                         sorth::compilation::WordType::internal, \
+                         sorth::compilation::WordContextManagement::unmanaged)
 
 
     // Helper class to manage the call stack of the compiler run-time and ensure that the stack is

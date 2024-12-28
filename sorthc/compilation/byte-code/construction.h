@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::compilation::byte_code
+namespace sorth::compilation::byte_code
 {
 
 

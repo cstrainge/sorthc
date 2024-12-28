@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
     try
     {
         // Create a compiler and compile the source file.
-        auto compiler = sorthc::compilation::Compiler(get_std_lib_directory());
+        auto compiler = sorth::compilation::Compiler(get_std_lib_directory());
 
         if (argc != 3)
         {

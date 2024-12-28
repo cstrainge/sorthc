@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::source
+namespace sorth::source
 {
 
 
@@ -41,7 +41,7 @@ namespace sorthc::source
 
 
     // Get a location for the current position in the C++ source code.
-    #define LOCATION_HERE sorthc::source::Location(__FILE__, __LINE__, 1)
+    #define LOCATION_HERE sorth::source::Location(__FILE__, __LINE__, 1)
 
 
     std::ostream& operator <<(std::ostream& stream, const Location& location);

@@ -3,7 +3,7 @@
 
 
 
-namespace sorthc::compilation
+namespace sorth::compilation
 {
 
 
