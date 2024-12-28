@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
     {
         // Something went wrong in the C++ run-time code.  Report the error and return a failure
         // status to the OS.
-        std::cerr << "An unexpected error occured: " << std::endl
+        std::cerr << "An unexpected error occurred: " << std::endl
                   << error.what() << std::endl;
 
         result = EXIT_FAILURE;
