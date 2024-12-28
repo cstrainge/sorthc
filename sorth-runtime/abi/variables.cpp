@@ -16,27 +16,27 @@ namespace sorth::run_time::abi
 
         // Keep track of the variables that are allocated on the stack in the Forth program.
         //
-        // The user code will allocate a slab of variables, and if it needs to access the variable
+        // The user code will allocate a block of variables, and if it needs to access the variable
         // list by index, it will use these slabs to access the variables.
-        class VariableSlab
+        class VariableBlock
         {
             private:
-                // A slab of variables that have been allocated on the stack.
-                struct Slab
+                // A block of variables that have been allocated on the stack.
+                struct Block
                 {
-                    size_t start;    // The index of the first variable in the slab.
-                    size_t size;     // The number of variables in the slab.
+                    size_t start;    // The index of the first variable in the block.
+                    size_t size;     // The number of variables in the block.
 
-                    Value** values;  // Pointers to the variables in the slab.
+                    Value** values;  // Pointers to the variables in the block.
                 };
 
             private:
                 // The stack of slabs that have been allocated.
-                std::list<Slab> slabs;
+                std::list<Block> slabs;
 
             public:
-                // Allocate a new slab of variables on the stack.
-                void allocate(Value* slab[], size_t size) noexcept
+                // Allocate a new block of variables on the stack.
+                void allocate(Value* block[], size_t size) noexcept
                 {
                     size_t start = 0;
 
@@ -45,10 +45,10 @@ namespace sorth::run_time::abi
                         start = slabs.front().start + slabs.front().size;
                     }
 
-                    slabs.push_front({.start = start, .size = size, .values = slab});
+                    slabs.push_front({.start = start, .size = size, .values = block});
                 }
 
-                // Release the most recently allocated slab of variables.
+                // Release the most recently allocated block of variables.
                 void release() noexcept
                 {
                     if (!slabs.empty())
@@ -57,38 +57,25 @@ namespace sorth::run_time::abi
                     }
                 }
 
-                // Read a variable from the slab by index.
-                Value* read(size_t index) noexcept
+                // Get a variable from one of the blocks by index.
+                Value* get(size_t index) noexcept
                 {
-                    for (const auto& slab : slabs)
+                    for (const auto& block : slabs)
                     {
-                        if (   (index >= slab.start)
-                            && (index < (slab.start + slab.size)))
+                        if (   (index >= block.start)
+                            && (index < (block.start + block.size)))
                         {
-                            return slab.values[index - slab.start];
+                            return block.values[index - block.start];
                         }
                     }
 
                     return nullptr;
                 }
-
-                // Write a variable to the slab by index.
-                void write(size_t index, Value* value) noexcept
-                {
-                    for (const auto& slab : slabs)
-                    {
-                        if (   (index >= slab.start)
-                            && (index < (slab.start + slab.size)))
-                        {
-                            (*slab.values[index - slab.start]) = (*value);
-                        }
-                    }
-                }
         };
 
 
         // Each thread get's it's own set of variables to go with it's own stack.
-        thread_local VariableSlab variables;
+        thread_local VariableBlock variables;
 
 
     }
@@ -120,15 +107,15 @@ extern "C"
     }
 
 
-    // Allocate a new reference slab of variables that have been allocated by the generated code
+    // Allocate a new reference block of variables that have been allocated by the generated code
     // on the stack.
-    void allocate_variable_slab(Value* slab[], size_t size) noexcept
+    void allocate_variable_slab(Value* block[], size_t size) noexcept
     {
-        variables.allocate(slab, size);
+        variables.allocate(block, size);
     }
 
 
-    // As the generated code exits a block, it will release the slab of variables that wre part
+    // As the generated code exits a block, it will release the block of variables that wre part
     // of that block.
     void release_variable_slab() noexcept
     {
@@ -139,14 +126,14 @@ extern "C"
     // Search the list of slabs for the variable by index and return the value.
     void read_variable(size_t index, Value* output) noexcept
     {
-        (*output) = (*variables.read(index));
+        (*output) = (*variables.get(index));
     }
 
 
     // Search the list of slabs for the variable by index and write the value.
     void write_variable(size_t index, Value* value) noexcept
     {
-        variables.write(index, value);
+        (*variables.get(index)) = (*value);
     }
 
 
