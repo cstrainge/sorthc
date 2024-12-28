@@ -7,7 +7,6 @@
 extern "C" int script_top_level();
 
 
-
 int main(int argc, char* argv[])
 {
     // Assume we'll be successful.

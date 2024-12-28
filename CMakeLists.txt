@@ -93,6 +93,10 @@ set_target_properties(${SORTH_RUNTIME_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY 
 
 
 
+target_precompile_headers(${SORTH_RUNTIME_NAME} PRIVATE "${SORTH_RUNTIME_DIR}/sorth-runtime.h")
+
+
+
 # Make sure that both targets can find their header files.
 target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_RUNTIME_SRCS}/")
 target_include_directories(${SORTH_RUNTIME_NAME} PRIVATE "${SORTH_RUNTIME_DIR}/")
