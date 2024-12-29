@@ -20,6 +20,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(BUILD_DIR "${CMAKE_BINARY_DIR}")
 set(DIST_DIR "${CMAKE_SOURCE_DIR}/dist")
 
+set(SORTH_C_SRC_DIR "${CMAKE_SOURCE_DIR}/sorthc")
+set(SORTH_RUNTIME_DIR "${CMAKE_SOURCE_DIR}/sorth-runtime")
+
 
 
 # Configure our LLVM dependencies.
@@ -51,8 +54,6 @@ set(SORTH_RUNTIME_NAME "sorth-runtime")
 
 
 # Add the compiler target executable.
-set(SORTH_C_SRC_DIR "${CMAKE_SOURCE_DIR}/sorthc")
-
 file(GLOB SORTH_C_SRCS "${SORTH_C_SRC_DIR}/*.cpp"
                        "${SORTH_C_SRC_DIR}/source/*.cpp"
                        "${SORTH_C_SRC_DIR}/compilation/*.cpp"
@@ -68,7 +69,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_C_SRC_DIR}/"
                                                    "${SORTH_C_SRC_DIR}/compilation/"
                                                    "${SORTH_C_SRC_DIR}/compilation/byte-code/"
                                                    "${SORTH_C_SRC_DIR}/compilation/run-time/"
-                                                   "${SORTH_C_SRC_DIR}/compilation/run-time/built-in-words/")
+                                                   "${SORTH_C_SRC_DIR}/compilation/run-time/built-in-words/"
+
+                                                   "${SORTH_RUNTIME_DIR}/")
 
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${DIST_DIR})
@@ -78,13 +81,14 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE "${SORTH_C_SRC_DIR}/sorthc.h")
 
 
 # Now add the sorth-runtime static library.
-set(SORTH_RUNTIME_DIR "${CMAKE_SOURCE_DIR}/sorth-runtime")
 file(GLOB SORTH_RUNTIME_SRCS "${SORTH_RUNTIME_DIR}/*.cpp"
                              "${SORTH_RUNTIME_DIR}/abi/*.cpp"
                              "${SORTH_RUNTIME_DIR}/abi/words/*.cpp"
                              "${SORTH_RUNTIME_DIR}/data-structures/*.cpp")
 
 add_library(${SORTH_RUNTIME_NAME} STATIC "${SORTH_RUNTIME_SRCS}")
+
+
 
 # The static library should be output to the dist directory, so that the compiler can find it.
 set_target_properties(${SORTH_RUNTIME_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${DIST_DIR}"
@@ -98,7 +102,7 @@ target_precompile_headers(${SORTH_RUNTIME_NAME} PRIVATE "${SORTH_RUNTIME_DIR}/so
 
 
 # Make sure that both targets can find their header files.
-target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_RUNTIME_SRCS}/")
+target_include_directories(${PROJECT_NAME} PRIVATE "${SORTH_RUNTIME_DIR}/")
 target_include_directories(${SORTH_RUNTIME_NAME} PRIVATE "${SORTH_RUNTIME_DIR}/")
 
 

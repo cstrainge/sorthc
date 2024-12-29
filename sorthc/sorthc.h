@@ -47,6 +47,9 @@
 #include <exception>
 
 
+#include "sorth-runtime.h"
+
+
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -54,6 +57,7 @@
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
@@ -69,7 +73,10 @@
 #include <llvm/MC/MCSubtargetInfo.h>
 #include <llvm/Object/SymbolicFile.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Utils.h>
 
@@ -92,4 +99,5 @@
 #include "compilation/run-time/compiler-runtime.h"
 #include "compilation/run-time/built-in-words/built-in-words.h"
 #include "compilation/byte-code/jit.h"
+#include "compilation/ir_generator.h"
 #include "compilation/compiler.h"

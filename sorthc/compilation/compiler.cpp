@@ -36,11 +36,10 @@ namespace sorth::compilation
                   << pretty_print(runtime, script->get_top_level())
                   << std::endl;
 
-        // Now that the script is compiled, we can generate the LLVM IR for it.
-        // generate_llvm_ir(script, source_path);
-
-        // Finally, we can compile the LLVM IR into native code.
-        // compile_native_code(output_path);
+        // Now that the script and it's sub-scripts are byte-code compiled, we can generate the LLVM
+        // IR for it.  Then we can compile  the LLVM IR to native code into an object file that can
+        // be linked with the runtime library into an executable.
+        generate_llvm_ir(script, output_path);
     }
 
 
