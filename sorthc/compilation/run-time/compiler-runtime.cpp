@@ -363,7 +363,7 @@ namespace sorth::compilation::run_time
     {
         auto [ found, word_info ] = find(word);
 
-        throw_error_if(!found, *this, "Word " + word + " not found.");
+        throw_error_if(!found, *this, "Word " + stringify(word) + " not found.");
 
         execute(word_info);
     }
@@ -373,7 +373,8 @@ namespace sorth::compilation::run_time
     {
         auto [ found, handler_info ] = find(word.get_handler_index());
 
-        throw_error_if(!found, *this, "Handler for word " + word.get_name() + " not found.");
+        throw_error_if(!found, *this, "Handler for word " + stringify(word.get_name())
+                                                          + " not found.");
 
         execute(handler_info);
     }

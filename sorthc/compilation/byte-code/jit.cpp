@@ -1574,6 +1574,7 @@ namespace sorth::compilation::byte_code
 
             if (!found)
             {
+std::cout << "----handle_word_index_name<00>--------" << std::endl;
                 throw_error(runtime, "Word '" + std::string(name) + "' not found.");
             }
 

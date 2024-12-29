@@ -50,6 +50,7 @@ namespace sorth::compilation::byte_code
 
         if (found == word_map.end())
         {
+std::cout << "----get_word<00>--------" << std::endl;
             throw_error("Word " + name + " not found in script.");
         }
 
