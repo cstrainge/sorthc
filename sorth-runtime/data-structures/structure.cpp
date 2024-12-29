@@ -103,7 +103,6 @@ namespace sorth::run_time::data_structures
         return result;
     }
 
-
     size_t Structure::hash() const noexcept
     {
         size_t hash_value = 0;

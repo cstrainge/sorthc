@@ -129,6 +129,19 @@ namespace sorth::run_time::data_structures
     }
 
 
+    Value HashTable::deep_copy() const noexcept
+    {
+        HashTablePtr result = std::make_shared<HashTable>();
+
+        for (const auto& [ key, value ] : items)
+        {
+            result->insert(key.deep_copy(), value.deep_copy());
+        }
+
+        return result;
+    }
+
+
     size_t HashTable::hash() const noexcept
     {
         size_t hash_value = 0;

@@ -518,4 +518,61 @@ namespace sorth::run_time::data_structures
     }
 
 
+    size_t Value::hash() const noexcept
+    {
+        if (is_none())
+        {
+            return std::hash<int>()(0);
+        }
+
+        if (is_int())
+        {
+            return std::hash<int64_t>()(std::get<int64_t>(value));
+        }
+
+        if (is_double())
+        {
+            return std::hash<double>()(std::get<double>(value));
+        }
+
+        if (is_bool())
+        {
+            return std::hash<bool>()(std::get<bool>(value));
+        }
+
+        if (is_string())
+        {
+            return std::hash<std::string>()(std::get<std::string>(value));
+        }
+
+        if (is_structure())
+        {
+            return std::get<StructurePtr>(value)->hash();
+        }
+
+        if (is_array())
+        {
+            return std::get<ArrayPtr>(value)->hash();
+        }
+
+        if (is_hash_table())
+        {
+            return std::get<HashTablePtr>(value)->hash();
+        }
+
+        if (is_byte_buffer())
+        {
+            return std::get<ByteBufferPtr>(value)->hash();
+        }
+
+        return 0;
+    }
+
+
+    void Value::hash_combine(size_t& seed, size_t value) noexcept
+    {
+        seed ^= seed ^ (value + 0x9e3779b9 + (seed << 6) + (seed >> 2));
+    }
+
+
 }

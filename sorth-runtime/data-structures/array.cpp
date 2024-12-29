@@ -109,6 +109,19 @@ namespace sorth::run_time::data_structures
     }
 
 
+    Value Array::deep_copy() const noexcept
+    {
+        ArrayPtr result = std::make_shared<Array>(items.size());
+
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            result->items[i] = items[i].deep_copy();
+        }
+
+        return result;
+    }
+
+
     size_t Array::hash() const noexcept
     {
         size_t hash_value = 0;

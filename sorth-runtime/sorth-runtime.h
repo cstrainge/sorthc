@@ -11,6 +11,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <list>
 #include <deque>
 #include <unordered_map>
 #include <variant>
@@ -18,6 +19,8 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
+#include <memory>
+#include <cstring>
 
 #include "data-structures/value.h"
 #include "data-structures/structure.h"
