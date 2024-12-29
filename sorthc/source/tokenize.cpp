@@ -16,6 +16,7 @@ namespace sorth::source
         {
             return    (next == ' ')
                    || (next == '\t')
+                   || (next == '\r')
                    || (next == '\n');
         }
 
