@@ -39,7 +39,7 @@ namespace sorth::compilation
         // Now that the script and it's sub-scripts are byte-code compiled, we can generate the LLVM
         // IR for it.  Then we can compile  the LLVM IR to native code into an object file that can
         // be linked with the runtime library into an executable.
-        generate_llvm_ir(script, output_path);
+        generate_llvm_ir(runtime.get_standard_library(), script, output_path);
     }
 
 
