@@ -30,18 +30,24 @@ namespace sorth::compilation
             {
                 switch (c)
                 {
-                    case '@':   stream << "_at_";       break;
-                    case '\'':  stream << "_prime_";    break;
-                    case '"':   stream << "_quote_";    break;
-                    case '%':   stream << "_percent_";  break;
-                    case '!':   stream << "_bang_";     break;
-                    case '?':   stream << "_question_"; break;
+                    case '@':   stream << "_at";            break;
+                    case '\'':  stream << "_prime";         break;
+                    case '"':   stream << "_quote";         break;
+                    case '%':   stream << "_percent";       break;
+                    case '!':   stream << "_bang";          break;
+                    case '?':   stream << "_question";      break;
+                    case '=':   stream << "_equal";         break;
+                    case '<':   stream << "_less";          break;
+                    case '>':   stream << "_greater";       break;
+                    case '+':   stream << "_plus";          break;
+                    case '[':   stream << "_left_square";   break;
+                    case ']':   stream << "_right_square";  break;
 
                     default:    stream << c;            break;
                 }
             }
 
-            stream << "_index_"
+            stream << "_"
                    << std::setw(6) << std::setfill('0') << current
                    << "_";
 
@@ -125,11 +131,8 @@ namespace sorth::compilation
         // later point, this word will still call the correct word.
         void try_resolve_calls(WordCollection& collection, byte_code::ByteCode& code)
         {
-            for (size_t i = 0; i < code.size(); ++i)
+            for (auto& instruction : code)
             {
-                // Get the current instruction.
-                auto& instruction = code[i];
-
                 // First make sure we're dealing with an execute instruction.
                 if (instruction.get_id() == byte_code::Instruction::Id::execute)
                 {
@@ -183,19 +186,65 @@ namespace sorth::compilation
         // Gather all the words in the script and it's subscripts.
         void gather_script_words(const byte_code::ScriptPtr& script, WordCollection& collection)
         {
-            //
+            // Gather up the words in the sub-scripts first...
+            for (const auto& sub_script : script->get_sub_scripts())
+            {
+                gather_script_words(sub_script, collection);
+            }
+
+            // Now we gather up the words in this script.
+            for (const auto& word : script->get_words())
+            {
+                collection.add_word(word);
+            }
         }
 
 
-        void collect_top_level_code(const byte_code::ScriptPtr& script)
+        // Collect all of the top-level code into one byte-code block.
+        void collect_top_level_code(const byte_code::ScriptPtr& script,
+                                    byte_code::ByteCode& top_level_code)
         {
-            //
+            // Add the top-level code from the sub-scripts first...
+            for (const auto& sub_script : script->get_sub_scripts())
+            {
+                collect_top_level_code(sub_script, top_level_code);
+            }
+
+            // Add the top-level code from this script.
+            top_level_code.insert(top_level_code.end(),
+                                  script->get_top_level().begin(),
+                                  script->get_top_level().end());
         }
 
 
-        void mark_used_words(WordCollection& collection, const byte_code::ByteCode& top_level_code)
+        void mark_used_words(WordCollection& collection, const byte_code::ByteCode& code)
         {
-            //
+            // Go through the top-level code and mark all the words that are used.
+            for (const auto& instruction : code)
+            {
+                if (instruction.get_id() == byte_code::Instruction::Id::execute)
+                {
+                    // Check to see if the call has been resolved.
+                    if (instruction.get_value().is_int())
+                    {
+                        // Mark the referenced word as used.
+                        auto index = static_cast<size_t>(instruction.get_value().get_int());
+                        auto& word = collection.words[index];
+
+                        if (!word.was_referenced)
+                        {
+                            word.was_referenced = true;
+
+                            // If the word is a Forth word, then we need to mark all the words that
+                            // it calls as referenced as well.
+                            if (word.code.has_value())
+                            {
+                                mark_used_words(collection, word.code.value());
+                            }
+                        }
+                    }
+                }
+            }
         }
 
 
@@ -242,16 +291,23 @@ namespace sorth::compilation
         // Compile the llvm IR for a word.
         void compile_word(const WordCollection& collection,
                           const WordInfo& word,
-                          const std::shared_ptr<llvm::Module>& module,
+                          std::shared_ptr<llvm::Module>& module,
+                          llvm::LLVMContext& context,
                           llvm::IRBuilder<>& builder)
         {
-            //
+            auto entry_block = llvm::BasicBlock::Create(context, "entry", word.function);
+
+            builder.SetInsertPoint(entry_block);
+
+            // Generate the return statement for the top-level function.
+            auto ret_val = llvm::ConstantInt::get(builder.getInt8Ty(), EXIT_SUCCESS);
+            builder.CreateRet(ret_val);
         }
 
 
         // Go through the collection of words and compile the ones that were referenced.
         void compile_used_words(WordCollection& collection,
-                                const std::shared_ptr<llvm::Module>& module,
+                                std::shared_ptr<llvm::Module>& module,
                                 llvm::LLVMContext& context,
                                 llvm::IRBuilder<>& builder)
         {
@@ -262,14 +318,14 @@ namespace sorth::compilation
                     && (word.code.has_value()))
                 {
                     // Create the word's IR function body.
-                    compile_word(collection, word, module, builder);
+                    compile_word(collection, word, module, context, builder);
                 }
             }
         }
 
 
         void compile_top_level_code(const byte_code::ByteCode& top_level_code,
-                                    const std::shared_ptr<llvm::Module>& module,
+                                    std::shared_ptr<llvm::Module>& module,
                                     llvm::LLVMContext& context,
                                     llvm::IRBuilder<>& builder)
         {
@@ -353,8 +409,10 @@ namespace sorth::compilation
         // standard library.
         byte_code::ByteCode top_level_code;
 
-        collect_top_level_code(standard_library);
-        collect_top_level_code(script);
+        collect_top_level_code(standard_library, top_level_code);
+        collect_top_level_code(script, top_level_code);
+
+        try_resolve_calls(words, top_level_code);
 
         // Now that we have all the top-levels collected, we can go through that code and mark
         // words as used or unused.  Then make sure that all of the used words have been properly
@@ -379,7 +437,8 @@ namespace sorth::compilation
         // Apply LLVM optimization passes to the module.
         optimize_module(module);
 
-        // Write the LLVM IR to an object file.
+        // We've generated our code and optimized it, we can now write the LLVM IR to an object
+        // file.
 
         // Get the target triple for the host machine.
         auto target_triple = llvm::sys::getDefaultTargetTriple();
