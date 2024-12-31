@@ -8,6 +8,7 @@
 #include "stack-words.h"
 #include "string-words.h"
 #include "structure-words.h"
+#include "terminal-words.h"
 #include "value-type-words.h"
 
 
@@ -29,6 +30,7 @@ namespace sorth::run_time::abi::words
         register_stack_words(registrar);
         register_string_words(registrar);
         register_structure_words(registrar);
+        register_terminal_words(registrar);
         register_value_type_words(registrar);
     }
 

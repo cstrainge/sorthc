@@ -19,6 +19,21 @@
 
 
 
+( Structure words. )
+[include] std/structure.f
+
+
+
+( Array words. )
+[include] std/array.f
+
+
+
+( Hash table words. )
+[include] std/hash-table.f
+
+
+
 ( Include some words for accessing the terminal. )
 [include] std/terminal.f
 

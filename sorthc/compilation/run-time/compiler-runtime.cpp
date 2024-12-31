@@ -28,8 +28,14 @@ namespace sorth::compilation::run_time
         // compiled code ultimately runs in.
         auto runtime_lib = compile_script("std/core-words.f");
 
-        // JIT compile the standard library's words and top level code, the words in the script will
-        // automaticaly be added to the run-time's dictionary.
+        // JIT compile the core standard library's words and top level code, the words in the script
+        // will automaticaly be added to the run-time's dictionary.
+        for (const auto& sub_script : runtime_lib->get_sub_scripts())
+        {
+            auto top_level = byte_code::get_jit_engine().jit_compile(*this, sub_script);
+            top_level(*this);
+        }
+
         auto top_level = byte_code::get_jit_engine().jit_compile(*this, runtime_lib);
         top_level(*this);
 

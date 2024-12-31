@@ -1,4 +1,97 @@
 
+: string.size@@ description: "Get the length of a string variable."
+                signature: "string_variable -- length"
+    @ string.size@
+;
+
+
+
+: string.find@ description: "Find the first instance of a sub-text within a string variable."
+               signature: "search string_variable -- position_or_npos"
+    @ string.find
+;
+
+
+
+: string.to_number@ description: "Convert the string in a variable to a number."
+                    signature: " string_variable -- new_number "
+    @ string.to_number
+;
+
+
+
+: string.[]!! description: "Insert a given sub-text into a string variable."
+              signature: "sub_string position string_variable -- updated_string"
+    variable! var_index
+
+    var_index @ @ string.[]!
+    var_index @ !
+;
+
+
+
+: string.[]@@ description: "Read a character from a given string variable."
+              signature: "index variable -- character"
+    @ string.[]@
+;
+
+
+
+: string.remove! description: "Remove a count of characters from the given variable."
+                 signature: "count position string_variable -- updated_string"
+    variable! var_index
+
+    var_index @ @ string.remove
+    var_index @ !
+;
+
+
+
+: string.substring description: "Extract a substring from an existing string."
+                   signature: "start end string -- substring"
+    variable! string
+
+    variable! end_index
+    variable! start_index
+
+    end_index @ string.npos =
+    if
+        string @ string.size@ -- end_index !
+    then
+
+    start_index @ variable! index
+
+    "" variable! sub_string
+
+    start_index @  string @ string.size@  >=
+    end_index @    string @ string.size@  >=
+    ||
+    if
+        start_index @
+        end_index @
+        string @ string.size@
+        "Substring indices are out of , ({}, {} / {},) bounds."
+        string.format throw
+    then
+
+    start_index @  end_index @  >
+    if
+        start_index @  end_index @ "Start and end index, ({}, {},) in reverse order."
+        string.format throw
+    then
+
+    begin
+        index @  end_index @  <=
+    while
+        sub_string @  index @ string @ string.[]@  +  sub_string !
+        index ++!
+    repeat
+
+    sub_string @
+;
+
+
+
 : string.split description: "Given a split character, split a string into an array of strings."
                signature: "split_char string -- string_array"
     variable! string

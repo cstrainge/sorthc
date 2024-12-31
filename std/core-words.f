@@ -161,19 +161,19 @@
 
 
 
-: until description: "The end of a loop/until block."
+: until immediate description: "The end of a loop/until block."
     "until" sentinel_word
 ;
 
 
 
-: while description: "Part of a begin/while/repeat block."
+: while immediate description: "Part of a begin/while/repeat block."
     "while" sentinel_word
 ;
 
 
 
-: repeat description: "The end of a begin/while/repeat block."
+: repeat immediate description: "The end of a begin/while/repeat block."
     "repeat" sentinel_word
 ;
 
@@ -396,7 +396,7 @@
 
 
 
-: loop description: "The end of a do loop."
+: loop immediate description: "The end of a do loop."
     "loop" sentinel_word
 ;
 
@@ -481,6 +481,37 @@
 
 
 ( Some useful stack management words. )
+
+
+
+: drop description: "Drop the top item from the stack."
+       signature: "a -- "
+    variable! ignored
+;
+
+
+
+: swap description: "Swap the top two items on the stack."
+       signature: "a b -- b a"
+    variable! b
+    variable! a
+
+    b @
+    a @
+;
+
+
+
+: dup description: "Duplicate the top item on the stack."
+      signature: "a -- a a"
+    variable! value
+
+    value @
+    value @
+;
+
+
+
 : nip description: "Nip the second from the top item from the stack."
       signature: "a b c -- a c"
     swap
@@ -632,6 +663,34 @@
 
 
 
+: ++  description: "Increment a value on the stack."
+      signature: "value -- incremented"
+    1 +
+;
+
+
+
+: ++!  description: "Increment the given variable."
+       signature: "variable -- "
+    dup @ ++ swap !
+;
+
+
+
+: --  description: "Decrement a value on the stack."
+      signature: "value -- decremented"
+    1 -
+;
+
+
+
+: --!  description: "Decrement the given variable."
+       signature: "variable -- "
+    dup @ -- swap !
+;
+
+
+
 : [&&] immediate  description: "Evaluate && at compile time."
                   signature: "a b -- result"
     &&
@@ -665,3 +724,8 @@
                         signature: " -- bool"
     sorth.os  "Linux"  =
 ;
+
+
+
+
+[include] array.f
