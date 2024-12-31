@@ -136,6 +136,7 @@ std::cerr << "add_word: " << name << std::endl;
             // Add a Forth word to our collection.
             void add_word(const byte_code::Construction& word)
             {
+std::cerr << "add_word: " << word.get_name() << std::endl;
                 // Cache the word's name.
                 const auto& name = word.get_name();
 
@@ -843,7 +844,7 @@ std::cerr << "add_word: " << name << std::endl;
                     auto block_index = builder.getInt64(variable.block_index);
                     auto new_index = builder.CreateAdd(base_index, block_index);
 
-                    builder.CreateStore(new_index, new_index);
+                    builder.CreateStore(new_index, variable.variable_index);
                 }
             }
 
@@ -1421,7 +1422,8 @@ std::cerr << "add_word: " << name << std::endl;
         }
 
 
-        void compile_top_level_code(const byte_code::ByteCode& top_level_code,
+        void compile_top_level_code(WordCollection& collection,
+                                    const byte_code::ByteCode& top_level_code,
                                     std::shared_ptr<llvm::Module>& module,
                                     llvm::LLVMContext& context,
                                     llvm::IRBuilder<>& builder,
@@ -1440,13 +1442,23 @@ std::cerr << "add_word: " << name << std::endl;
                                                                     "script_top_level",
                                                                     module.get());
 
-            auto entry_block = llvm::BasicBlock::Create(context, "entry", top_level_function);
+            /*auto entry_block = llvm::BasicBlock::Create(context, "entry", top_level_function);
 
             builder.SetInsertPoint(entry_block);
 
             // Generate the return statement for the top-level function.
             auto ret_val = llvm::ConstantInt::get(builder.getInt1Ty(), EXIT_SUCCESS);
-            builder.CreateRet(ret_val);
+            builder.CreateRet(ret_val);*/
+
+            generate_ir_for_byte_code(collection,
+                                      top_level_code,
+                                      module,
+                                      context,
+                                      builder,
+                                      top_level_function,
+                                      global_constant_map,
+                                      runtime_api,
+                                      true);
         }
 
 
@@ -1489,25 +1501,24 @@ std::cerr << "add_word: " << name << std::endl;
 
         void optimize_module(const std::shared_ptr<llvm::Module>& module)
         {
-            // Create a pass manager for the module.
-            /*llvm::legacy::PassManager pass_manager;
+            // Create the pass manager that will run the optimization passes on the module.
+            llvm::PassBuilder pass_builder;
+            llvm::LoopAnalysisManager loop_am;
+            llvm::FunctionAnalysisManager function_am;
+            llvm::CGSCCAnalysisManager cgsccam;
+            llvm::ModuleAnalysisManager module_am;
 
-            // Add the target data to the pass manager.
-            module->setDataLayout(llvm::sys::getDefaultDataLayout());
-            pass_manager.add(llvm::createTargetTransformInfoWrapperPass(module->getDataLayout()));
+            pass_builder.registerModuleAnalyses(module_am);
+            pass_builder.registerCGSCCAnalyses(cgsccam);
+            pass_builder.registerFunctionAnalyses(function_am);
+            pass_builder.registerLoopAnalyses(loop_am);
+            pass_builder.crossRegisterProxies(loop_am, function_am, cgsccam, module_am);
 
-            // Add the optimization passes to the pass manager.
-            llvm::PassManagerBuilder pass_manager_builder;
-            pass_manager_builder.OptLevel = 3;
-            pass_manager_builder.SizeLevel = 0;
-            pass_manager_builder.Inliner = llvm::createFunctionInliningPass();
-            pass_manager_builder.LoopVectorize = true;
-            pass_manager_builder.SLPVectorize = true;
+            llvm::ModulePassManager mpm =
+                            pass_builder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
 
-            pass_manager_builder.populateModulePassManager(pass_manager);
-
-            // Run the optimization passes on the module.
-            pass_manager.run(*module);*/
+            // Now, run the optimization passes on the module.
+            mpm.run(*module, module_am);
         }
 
 
@@ -1564,7 +1575,13 @@ std::cerr << "add_word: " << name << std::endl;
         // Create the script top-level function.  This function will be the entry point for the
         // resulting program.  It'll be made of of all the top level blocks in each of the scripts
         // that we gathered previously.
-        compile_top_level_code(top_level_code, module, context, builder, runtime_api, const_map);
+        compile_top_level_code(words,
+                               top_level_code,
+                               module,
+                               context,
+                               builder,
+                               runtime_api,
+                               const_map);
 
         // Compile the function bodies for all used Forth words.
         compile_used_words(words, module, context, builder, runtime_api, const_map);
