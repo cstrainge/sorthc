@@ -36,7 +36,7 @@ namespace sorth::run_time::abi
 
             public:
                 // Allocate a new block of variables on the stack.
-                void allocate(Value* block[], size_t size) noexcept
+                int64_t allocate(Value* block[], size_t size) noexcept
                 {
                     size_t start = 0;
 
@@ -46,6 +46,8 @@ namespace sorth::run_time::abi
                     }
 
                     slabs.push_front({.start = start, .size = size, .values = block});
+
+                    return start;
                 }
 
                 // Release the most recently allocated block of variables.
@@ -109,9 +111,9 @@ extern "C"
 
     // Allocate a new reference block of variables that have been allocated by the generated code
     // on the stack.
-    void allocate_variable_block(Value* block[], size_t size) noexcept
+    int64_t allocate_variable_block(Value* block[], size_t size) noexcept
     {
-        variables.allocate(block, size);
+        return variables.allocate(block, size);
     }
 
 
@@ -156,9 +158,9 @@ extern "C"
 
 
     // Called by generated code to copy the value of one variable to another.
-    void copy_variable(Value* input, Value* output) noexcept
+    void deep_copy_variable(Value* input, Value* output) noexcept
     {
-        (*output) = (*input);
+        (*output) = input->deep_copy();
     }
 
 

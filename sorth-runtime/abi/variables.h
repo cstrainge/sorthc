@@ -16,10 +16,10 @@ extern "C"
     void free_variable(sorth::run_time::data_structures::Value* value) noexcept;
 
 
-    // Allocate a new reference slab of variables that have been allocated by the generated code
-    // on the stack.
-    void allocate_variable_block(sorth::run_time::data_structures::Value* slab[],
-                                size_t size) noexcept;
+    // Allocate a new reference block of variables that have been allocated by the generated code
+    // on the stack.  Returns the base index of the block of variables.
+    int64_t allocate_variable_block(sorth::run_time::data_structures::Value* block[],
+                                    size_t size) noexcept;
 
 
     // As the generated code exits a block, it will release the slab of variables that wre part
@@ -36,8 +36,8 @@ extern "C"
 
 
     // Called by generated code to copy the value of one variable to another.
-    void copy_variable(sorth::run_time::data_structures::Value* input,
-                       sorth::run_time::data_structures::Value* output) noexcept;
+    void deep_copy_variable(sorth::run_time::data_structures::Value* input,
+                            sorth::run_time::data_structures::Value* output) noexcept;
 
 
 }

@@ -81,6 +81,7 @@ namespace sorth::compilation
         {
             llvm::AllocaInst* variable;
             llvm::AllocaInst* variable_index;
+            size_t block_index;
         };
 
 
@@ -119,6 +120,7 @@ namespace sorth::compilation
             // Add a native word to our collection.
             void add_word(const std::string& name, const std::string& handler_name)
             {
+std::cerr << "add_word: " << name << std::endl;
                 WordInfo info;
 
                 info.name = name;
@@ -218,7 +220,7 @@ namespace sorth::compilation
             llvm::Function* release_variable_block;
             llvm::Function* read_variable;
             llvm::Function* write_variable;
-            llvm::Function* copy_variable;
+            llvm::Function* deep_copy_variable;
 
             // External stack functions.
             llvm::Function* stack_push;
@@ -281,7 +283,7 @@ namespace sorth::compilation
                                                         module.get());
 
             auto allocate_variable_block_signature
-                             = llvm::FunctionType::get(void_type,
+                             = llvm::FunctionType::get(uint64_type,
                                                        { value_struct_ptr_type, uint64_type },
                                                        false);
             auto allocate_variable_block = llvm::Function::Create(allocate_variable_block_signature,
@@ -309,14 +311,14 @@ namespace sorth::compilation
                                                          "write_variable",
                                                          module.get());
 
-            auto copy_variable_signature = llvm::FunctionType::get(void_type,
+            auto deep_copy_variable_signature = llvm::FunctionType::get(void_type,
                                                                   { value_struct_ptr_type,
                                                                     value_struct_ptr_type },
                                                                   false);
 
-            auto copy_variable = llvm::Function::Create(copy_variable_signature,
+            auto deep_copy_variable = llvm::Function::Create(deep_copy_variable_signature,
                                                         llvm::Function::ExternalLinkage,
-                                                        "copy_variable",
+                                                        "deep_copy_variable",
                                                         module.get());
 
             // Register the external stack functions.
@@ -423,7 +425,7 @@ namespace sorth::compilation
                     .release_variable_block = release_variable_block,
                     .read_variable = read_variable,
                     .write_variable = write_variable,
-                    .copy_variable = copy_variable,
+                    .deep_copy_variable = deep_copy_variable,
 
                     .stack_push = stack_push,
                     .stack_push_int = stack_push_int,
@@ -663,6 +665,9 @@ namespace sorth::compilation
             //
             // Also, we'll need go through the byte-code and for every instruction that can cause a
             // branch we'll need to create basic blocks for each of the possible branches.
+
+            size_t var_index = 0;
+
             for (size_t i = 0; i < code.size(); ++i)
             {
                 const auto& instruction = code[i];
@@ -675,10 +680,12 @@ namespace sorth::compilation
 
                             info.variable = builder.CreateAlloca(runtime_api.value_struct_type);
                             info.variable_index = builder.CreateAlloca(int64_type);
+                            info.block_index = var_index;
+
+                            ++var_index;
 
                             variable_map[instruction.get_value().get_string()] = info;
                         }
-
                         break;
 
                     case byte_code::Instruction::Id::def_constant:
@@ -816,23 +823,28 @@ namespace sorth::compilation
                                                              variable_map.size());
                 auto block_array = builder.CreateAlloca(value_array_type);
 
-                int var_index = 0;
-
                 for (const auto& [_, variable] : variable_map)
                 {
                     auto array_ptr = builder.CreateStructGEP(value_array_type,
-                                                            block_array,
-                                                            var_index);
+                                                             block_array,
+                                                             variable.block_index);
                     builder.CreateStore(variable.variable, array_ptr);
-
-                    // TODO: Write code to populate the variable's index value.
-
-                    var_index++;
                 }
 
                 auto array_ptr = builder.CreateStructGEP(value_array_type, block_array, 0);
-                builder.CreateCall(runtime_api.allocate_variable_block,
-                                { array_ptr, builder.getInt64(variable_map.size()) });
+                auto base_index = builder.CreateCall(runtime_api.allocate_variable_block,
+                                                     {
+                                                        array_ptr,
+                                                        builder.getInt64(variable_map.size())
+                                                     });
+
+                for (const auto& [_, variable] : variable_map)
+                {
+                    auto block_index = builder.getInt64(variable.block_index);
+                    auto new_index = builder.CreateAdd(base_index, block_index);
+
+                    builder.CreateStore(new_index, new_index);
+                }
             }
 
             // Create the block to handle errors.
@@ -868,16 +880,21 @@ namespace sorth::compilation
                             auto name = instruction.get_value().get_string();
                             auto iterator = constant_map.find(name);
 
+                            llvm::Value* constant = nullptr;
+
                             if (iterator != constant_map.end())
                             {
-                                builder.CreateCall(runtime_api.initialize_variable,
-                                                { iterator->second });
+                                constant = iterator->second;
+                                builder.CreateCall(runtime_api.initialize_variable, { constant });
                             }
                             else
                             {
-                                auto global = global_constant_map[name];
-                                builder.CreateCall(runtime_api.initialize_variable, { global });
+                                constant = global_constant_map[name];
+                                builder.CreateCall(runtime_api.initialize_variable, { constant });
                             }
+
+                            // Pop the value for the new constant off of the stack.
+                            builder.CreateCall(runtime_api.stack_pop, { constant });
                         }
                         break;
 
@@ -980,13 +997,35 @@ namespace sorth::compilation
                                 }
                                 else if (const_iter != constant_map.end())
                                 {
+                                    auto variable_temp =
+                                                builder.CreateAlloca(runtime_api.value_struct_type);
+                                    builder.CreateCall(runtime_api.initialize_variable,
+                                                       { variable_temp });
+
+                                    builder.CreateCall(runtime_api.deep_copy_variable,
+                                                       { const_iter->second, variable_temp });
+
                                     builder.CreateCall(runtime_api.stack_push,
-                                                       { const_iter->second });
+                                                       { variable_temp });
+
+                                    builder.CreateCall(runtime_api.free_variable,
+                                                       { variable_temp });
                                 }
                                 else if (global_iter != global_constant_map.end())
                                 {
+                                    auto variable_temp =
+                                                builder.CreateAlloca(runtime_api.value_struct_type);
+                                    builder.CreateCall(runtime_api.initialize_variable,
+                                                       { variable_temp });
+
+                                    builder.CreateCall(runtime_api.deep_copy_variable,
+                                                       { global_iter->second, variable_temp });
+
                                     builder.CreateCall(runtime_api.stack_push,
-                                                       { global_iter->second });
+                                                       { variable_temp });
+
+                                    builder.CreateCall(runtime_api.free_variable,
+                                                       { variable_temp });
                                 }
                                 else
                                 {
@@ -995,9 +1034,6 @@ namespace sorth::compilation
 
                                 builder.CreateBr(blocks[i]);
                                 builder.SetInsertPoint(blocks[i]);
-
-                                // TODO: Check if it's a constant or variable index word.
-                                // throw_error("Word " + name + " not found for execution.");
                             }
                             else if (value.is_numeric())
                             {
