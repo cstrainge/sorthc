@@ -143,7 +143,12 @@ int main(int argc, char* argv[])
     }
     catch (const std::runtime_error& error)
     {
-        std::cerr << error.what() << std::endl;
+        std::cerr << "Error: " << error.what() << std::endl;
+        result = EXIT_FAILURE;
+    }
+    catch (const std::exception& error)
+    {
+        std::cerr << "Error: " << error.what() << "." << std::endl;
         result = EXIT_FAILURE;
     }
     catch (...)

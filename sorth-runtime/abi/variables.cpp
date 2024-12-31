@@ -109,7 +109,7 @@ extern "C"
 
     // Allocate a new reference block of variables that have been allocated by the generated code
     // on the stack.
-    void allocate_variable_slab(Value* block[], size_t size) noexcept
+    void allocate_variable_block(Value* block[], size_t size) noexcept
     {
         variables.allocate(block, size);
     }
@@ -117,23 +117,41 @@ extern "C"
 
     // As the generated code exits a block, it will release the block of variables that wre part
     // of that block.
-    void release_variable_slab() noexcept
+    void release_variable_block() noexcept
     {
         variables.release();
     }
 
 
     // Search the list of slabs for the variable by index and return the value.
-    void read_variable(size_t index, Value* output) noexcept
+    bool read_variable(size_t index, Value* output) noexcept
     {
-        (*output) = (*variables.get(index));
+        auto variable = variables.get(index);
+
+        if (variable == nullptr)
+        {
+            return true;
+        }
+
+        (*output) = (*variable);
+
+        return false;
     }
 
 
     // Search the list of slabs for the variable by index and write the value.
-    void write_variable(size_t index, Value* value) noexcept
+    bool write_variable(size_t index, Value* value) noexcept
     {
-        (*variables.get(index)) = (*value);
+        auto variable = variables.get(index);
+
+        if (variable == nullptr)
+        {
+            return true;
+        }
+
+        (*variable) = (*value);
+
+        return false;
     }
 
 

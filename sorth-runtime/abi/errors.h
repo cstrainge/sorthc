@@ -16,6 +16,9 @@ extern "C"
     void push_last_error();
 
 
+    bool is_error_set();
+
+
     void clear_last_error();
 
 

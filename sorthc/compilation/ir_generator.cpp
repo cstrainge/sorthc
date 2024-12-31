@@ -3,6 +3,20 @@
 
 
 
+extern "C"
+{
+
+
+    // Dummy version of the word table, which will be properly defined in the generated code.
+    // However the runtime library has an external reference to it, so we need to define it here as
+    // well.
+    using WordType = int8_t (*)();
+    WordType word_table[1] = { nullptr };
+
+
+}
+
+
 namespace sorth::compilation
 {
 
@@ -59,6 +73,21 @@ namespace sorth::compilation
         using WordMap = std::unordered_map<std::string, size_t>;
 
 
+        // Map of names to LLVM global variables.
+        using GlobalMap = std::unordered_map<std::string, llvm::GlobalVariable*>;
+
+
+        struct ValueInfo
+        {
+            llvm::AllocaInst* variable;
+            llvm::AllocaInst* variable_index;
+        };
+
+
+        // Map of names ot LLVM local variables.
+        using ValueMap = std::unordered_map<std::string, ValueInfo>;
+
+
         // Information about a word that the compiler knows about.
         struct WordInfo
         {
@@ -72,6 +101,7 @@ namespace sorth::compilation
         };
 
 
+        // List of words as we find them from various sources.
         using WordInfoList = std::vector<WordInfo>;
 
 
@@ -172,6 +202,247 @@ namespace sorth::compilation
         }
 
 
+        // The API as exposed by the runtime-library that's intended to be called directly by the
+        // generated code.
+        struct RuntimeApi
+        {
+            // The value structure type.
+            llvm::StructType* value_struct_type;
+            llvm::PointerType* value_struct_ptr_type;
+            llvm::ArrayType* value_struct_ptr_array_type;
+
+            // External variable functions.
+            llvm::Function* initialize_variable;
+            llvm::Function* free_variable;
+            llvm::Function* allocate_variable_block;
+            llvm::Function* release_variable_block;
+            llvm::Function* read_variable;
+            llvm::Function* write_variable;
+            llvm::Function* copy_variable;
+
+            // External stack functions.
+            llvm::Function* stack_push;
+            llvm::Function* stack_push_int;
+            llvm::Function* stack_push_double;
+            llvm::Function* stack_push_bool;
+            llvm::Function* stack_push_string;
+            llvm::Function* stack_pop;
+            llvm::Function* stack_pop_int;
+            llvm::Function* stack_pop_bool;
+
+            // External error functions.
+            llvm::Function* set_last_error;
+            llvm::Function* get_last_error;
+            llvm::Function* push_last_error;
+            llvm::Function* clear_last_error;
+        };
+
+
+        // Register the runtime API with the module.
+        RuntimeApi register_runtime_api(std::shared_ptr<llvm::Module>& module)
+        {
+            const size_t value_size = sizeof(sorth::run_time::data_structures::Value);
+
+            auto void_type = llvm::Type::getVoidTy(module->getContext());
+            auto uint64_type = llvm::Type::getInt64Ty(module->getContext());
+            auto double_type = llvm::Type::getDoubleTy(module->getContext());
+            auto bool_type = llvm::Type::getInt1Ty(module->getContext());
+            auto char_ptr_type = llvm::PointerType::getUnqual(bool_type);
+
+            auto uint64_ptr_type = llvm::PointerType::getUnqual(uint64_type);
+
+            auto byte_type = llvm::Type::getInt8Ty(module->getContext());
+            auto byte_array_type = llvm::ArrayType::get(byte_type, value_size);
+
+            // Register the value struck type as an opaque data type.
+            std::vector<llvm::Type*> value_struct_members = { byte_array_type };
+
+            auto value_struct_type = llvm::StructType::create(module->getContext(),
+                                                              value_struct_members,
+                                                              "Value");
+
+            auto value_struct_ptr_type = llvm::PointerType::getUnqual(value_struct_type);
+
+            auto value_struct_ptr_array_type = llvm::ArrayType::get(value_struct_ptr_type, 0);
+
+
+
+            // Register the external variable functions.
+            auto initialize_variable_signature
+                             = llvm::FunctionType::get(void_type, { value_struct_ptr_type }, false);
+            auto initialize_variable = llvm::Function::Create(initialize_variable_signature,
+                                                              llvm::Function::ExternalLinkage,
+                                                              "initialize_variable",
+                                                              module.get());
+
+            auto free_variable = llvm::Function::Create(initialize_variable_signature,
+                                                        llvm::Function::ExternalLinkage,
+                                                        "free_variable",
+                                                        module.get());
+
+            auto allocate_variable_block_signature
+                             = llvm::FunctionType::get(void_type,
+                                                       { value_struct_ptr_type, uint64_type },
+                                                       false);
+            auto allocate_variable_block = llvm::Function::Create(allocate_variable_block_signature,
+                                                                 llvm::Function::ExternalLinkage,
+                                                                 "allocate_variable_block",
+                                                                 module.get());
+
+            auto release_variable_block_signature = llvm::FunctionType::get(void_type, false);
+            auto release_variable_block = llvm::Function::Create(release_variable_block_signature,
+                                                                llvm::Function::ExternalLinkage,
+                                                                "release_variable_block",
+                                                                module.get());
+
+            auto rw_variable_signature =
+                                     llvm::FunctionType::get(bool_type,
+                                                             { uint64_type, value_struct_ptr_type },
+                                                             false);
+
+            auto read_variable = llvm::Function::Create(rw_variable_signature,
+                                                        llvm::Function::ExternalLinkage,
+                                                        "read_variable",
+                                                        module.get());
+            auto write_variable = llvm::Function::Create(rw_variable_signature,
+                                                         llvm::Function::ExternalLinkage,
+                                                         "write_variable",
+                                                         module.get());
+
+            auto copy_variable_signature = llvm::FunctionType::get(void_type,
+                                                                  { value_struct_ptr_type,
+                                                                    value_struct_ptr_type },
+                                                                  false);
+
+            auto copy_variable = llvm::Function::Create(copy_variable_signature,
+                                                        llvm::Function::ExternalLinkage,
+                                                        "copy_variable",
+                                                        module.get());
+
+            // Register the external stack functions.
+            auto stack_push_signature = llvm::FunctionType::get(void_type,
+                                                                { value_struct_ptr_type },
+                                                                false);
+            auto stack_push = llvm::Function::Create(stack_push_signature,
+                                                     llvm::Function::ExternalLinkage,
+                                                     "stack_push",
+                                                     module.get());
+
+            auto stack_push_int_signature = llvm::FunctionType::get(void_type,
+                                                                    { uint64_type },
+                                                                    false);
+            auto stack_push_int = llvm::Function::Create(stack_push_int_signature,
+                                                         llvm::Function::ExternalLinkage,
+                                                         "stack_push_int",
+                                                         module.get());
+
+            auto stack_push_double_signature = llvm::FunctionType::get(void_type,
+                                                                       { double_type },
+                                                                       false);
+            auto stack_push_double = llvm::Function::Create(stack_push_double_signature,
+                                                            llvm::Function::ExternalLinkage,
+                                                            "stack_push_double",
+                                                            module.get());
+
+            auto stack_push_bool_signature = llvm::FunctionType::get(void_type,
+                                                                     { bool_type },
+                                                                     false);
+            auto stack_push_bool = llvm::Function::Create(stack_push_bool_signature,
+                                                          llvm::Function::ExternalLinkage,
+                                                          "stack_push_bool",
+                                                          module.get());
+
+            auto stack_push_string_signature = llvm::FunctionType::get(void_type,
+                                                                       { char_ptr_type },
+                                                                       false);
+            auto stack_push_string = llvm::Function::Create(stack_push_string_signature,
+                                                            llvm::Function::ExternalLinkage,
+                                                            "stack_push_string",
+                                                            module.get());
+
+            auto stack_pop_signature = llvm::FunctionType::get(bool_type,
+                                                               { value_struct_ptr_type },
+                                                               false);
+            auto stack_pop = llvm::Function::Create(stack_pop_signature,
+                                                    llvm::Function::ExternalLinkage,
+                                                    "stack_pop",
+                                                    module.get());
+
+            auto stack_pop_int_signature = llvm::FunctionType::get(bool_type,
+                                                                   { uint64_ptr_type },
+                                                                   false);
+            auto stack_pop_int = llvm::Function::Create(stack_pop_int_signature,
+                                                        llvm::Function::ExternalLinkage,
+                                                        "stack_pop_int",
+                                                        module.get());
+
+            auto stack_pop_bool_signature = llvm::FunctionType::get(bool_type,
+                                                                    { char_ptr_type },
+                                                                    false);
+            auto stack_pop_bool = llvm::Function::Create(stack_pop_bool_signature,
+                                                         llvm::Function::ExternalLinkage,
+                                                         "stack_pop_bool",
+                                                         module.get());
+
+            // Register the external error functions.
+            auto set_last_error_signature = llvm::FunctionType::get(void_type,
+                                                                    { char_ptr_type },
+                                                                    false);
+            auto set_last_error = llvm::Function::Create(set_last_error_signature,
+                                                        llvm::Function::ExternalLinkage,
+                                                        "set_last_error",
+                                                        module.get());
+
+            auto get_last_error_signature = llvm::FunctionType::get(char_ptr_type, false);
+            auto get_last_error = llvm::Function::Create(get_last_error_signature,
+                                                         llvm::Function::ExternalLinkage,
+                                                         "get_last_error",
+                                                         module.get());
+
+            auto push_last_error_signature = llvm::FunctionType::get(void_type, false);
+            auto push_last_error = llvm::Function::Create(push_last_error_signature,
+                                                          llvm::Function::ExternalLinkage,
+                                                          "push_last_error",
+                                                          module.get());
+
+            auto clear_last_error_signature = llvm::FunctionType::get(void_type, false);
+            auto clear_last_error = llvm::Function::Create(clear_last_error_signature,
+                                                           llvm::Function::ExternalLinkage,
+                                                           "clear_last_error",
+                                                           module.get());
+
+            return
+                {
+                    .value_struct_type = value_struct_type,
+                    .value_struct_ptr_type = value_struct_ptr_type,
+                    .value_struct_ptr_array_type = value_struct_ptr_array_type,
+
+                    .initialize_variable = initialize_variable,
+                    .free_variable = free_variable,
+                    .allocate_variable_block = allocate_variable_block,
+                    .release_variable_block = release_variable_block,
+                    .read_variable = read_variable,
+                    .write_variable = write_variable,
+                    .copy_variable = copy_variable,
+
+                    .stack_push = stack_push,
+                    .stack_push_int = stack_push_int,
+                    .stack_push_double = stack_push_double,
+                    .stack_push_bool = stack_push_bool,
+                    .stack_push_string = stack_push_string,
+                    .stack_pop = stack_pop,
+                    .stack_pop_int = stack_pop_int,
+                    .stack_pop_bool = stack_pop_bool,
+
+                    .set_last_error = set_last_error,
+                    .get_last_error = get_last_error,
+                    .push_last_error = push_last_error,
+                    .clear_last_error = clear_last_error
+                };
+        }
+
+
+        // Gather all the runtime words into the collection.
         void gather_runtime_words(WordCollection& collection)
         {
             auto collector = [&collection](const std::string& name, const std::string& handler_name)
@@ -217,12 +488,15 @@ namespace sorth::compilation
         }
 
 
+        // Mark all the words that are used in the top-level code.  Also mark as used any words that
+        // are called by the used words.
         void mark_used_words(WordCollection& collection, const byte_code::ByteCode& code)
         {
             // Go through the top-level code and mark all the words that are used.
             for (const auto& instruction : code)
             {
-                if (instruction.get_id() == byte_code::Instruction::Id::execute)
+                if (   (instruction.get_id() == byte_code::Instruction::Id::execute)
+                    || (instruction.get_id() == byte_code::Instruction::Id::word_index))
                 {
                     // Check to see if the call has been resolved.
                     if (instruction.get_value().is_int())
@@ -243,6 +517,25 @@ namespace sorth::compilation
                             }
                         }
                     }
+                    else if (instruction.get_value().is_string())
+                    {
+                        // Try to resolve the word name to it's index now, we'll mark it as used.
+                        auto& name = instruction.get_value().get_string();
+                        auto iterator = collection.word_map.find(name);
+
+                        if (iterator != collection.word_map.end())
+                        {
+                            auto index = iterator->second;
+                            auto& word_info = collection.words[index];
+
+                            word_info.was_referenced = true;
+
+                            if (word_info.code.has_value())
+                            {
+                                mark_used_words(collection, word_info.code.value());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -254,7 +547,7 @@ namespace sorth::compilation
                                      llvm::LLVMContext& context)
         {
             // Create the signature for the word's function: int8_t word_fn(void);
-            llvm::FunctionType* signature = llvm::FunctionType::get(llvm::Type::getInt8Ty(context),
+            llvm::FunctionType* signature = llvm::FunctionType::get(llvm::Type::getInt1Ty(context),
                                                                     false);
 
             // If the word is a native word, then it's external and will be linked in later.
@@ -288,20 +581,778 @@ namespace sorth::compilation
         }
 
 
-        // Compile the llvm IR for a word.
-        void compile_word(const WordCollection& collection,
-                          const WordInfo& word,
-                          std::shared_ptr<llvm::Module>& module,
-                          llvm::LLVMContext& context,
-                          llvm::IRBuilder<>& builder)
+        // Create a string constant in the module.
+        llvm::Value* define_string_constant(const std::string& text,
+                                            llvm::IRBuilder<>& builder,
+                                            std::shared_ptr<llvm::Module>& module,
+                                            llvm::LLVMContext& context)
         {
-            auto entry_block = llvm::BasicBlock::Create(context, "entry", word.function);
+            // Get our types.
+            auto char_type = llvm::Type::getInt8Ty(context);
+            auto char_ptr_type = llvm::PointerType::getUnqual(char_type);
 
+            // Create the constant data array for the string then create a global variable to
+            // hold it.
+            auto string_constant = llvm::ConstantDataArray::getString(context, text, true);
+            auto global = new llvm::GlobalVariable(*module,
+                                                    string_constant->getType(),
+                                                    true,
+                                                    llvm::GlobalValue::PrivateLinkage,
+                                                    string_constant);
+
+            // Create a pointer to the global variable for the string constant.
+            llvm::Value* string_ptr = builder.CreatePointerCast(global, char_ptr_type);
+
+            return string_ptr;
+        }
+
+
+        // Generate the LLVM IR for a byte-code block.  This can be used for both Forth words and
+        // the top-level script code.
+        void generate_ir_for_byte_code(WordCollection& collection,
+                                       const byte_code::ByteCode& code,
+                                       std::shared_ptr<llvm::Module>& module,
+                                       llvm::LLVMContext& context,
+                                       llvm::IRBuilder<>& builder,
+                                       llvm::Function* function,
+                                       GlobalMap global_constant_map,
+                                       const RuntimeApi& runtime_api,
+                                       bool is_top_level)
+        {
+            // Gather some types we'll need.
+            auto bool_type = llvm::Type::getInt1Ty(context);
+            auto int64_type = llvm::Type::getInt64Ty(context);
+            auto double_type = llvm::Type::getDoubleTy(context);
+            auto char_type = llvm::Type::getInt1Ty(context);
+
+            // Keep track of the variables and constants that are used in the byte-code block.
+            ValueMap variable_map;
+            std::unordered_map<std::string, llvm::AllocaInst*> constant_map;
+
+            size_t block_index = 1;
+
+            // Keep track of the basic blocks we create for the jump targets.
+            auto blocks = std::unordered_map<size_t, llvm::BasicBlock*>();
+            auto auto_jump_blocks = std::unordered_map<size_t, std::pair<llvm::BasicBlock*,
+                                                                         llvm::BasicBlock*>>();
+
+            auto var_read_blocks = std::unordered_map<size_t, std::tuple<llvm::BasicBlock*,
+                                                                         llvm::BasicBlock*,
+                                                                         llvm::BasicBlock*>>();
+
+            // Create the entry block of the function.
+            auto entry_block = llvm::BasicBlock::Create(context, "entry_block", function);
             builder.SetInsertPoint(entry_block);
 
-            // Generate the return statement for the top-level function.
-            auto ret_val = llvm::ConstantInt::get(builder.getInt8Ty(), EXIT_SUCCESS);
-            builder.CreateRet(ret_val);
+            // Keep track of any loop and catch block markers.
+            std::vector<std::pair<size_t, size_t>> loop_markers;
+            std::vector<size_t> catch_markers;
+
+            // Keep track of any jump targets that are the target of a catch block.
+            std::set<size_t> catch_target_markers;
+
+            // Initialize the return value to false.
+            auto return_value_variable = builder.CreateAlloca(bool_type);
+            builder.CreateStore(builder.getInt1(0), return_value_variable);
+
+            // First pass...
+            //
+            // Gather the variables and constants that are used in the byte-code block.  We'll need
+            // to generate the value variables for the variables and constants.  As well as
+            // variables to hold the variable indicies at run-time.
+            //
+            // Also, we'll need go through the byte-code and for every instruction that can cause a
+            // branch we'll need to create basic blocks for each of the possible branches.
+            for (size_t i = 0; i < code.size(); ++i)
+            {
+                const auto& instruction = code[i];
+
+                switch (instruction.get_id())
+                {
+                    case byte_code::Instruction::Id::def_variable:
+                        {
+                            ValueInfo info;
+
+                            info.variable = builder.CreateAlloca(runtime_api.value_struct_type);
+                            info.variable_index = builder.CreateAlloca(int64_type);
+
+                            variable_map[instruction.get_value().get_string()] = info;
+                        }
+
+                        break;
+
+                    case byte_code::Instruction::Id::def_constant:
+                        if (is_top_level)
+                        {
+                            global_constant_map[instruction.get_value().get_string()] =
+                                          new llvm::GlobalVariable(*module,
+                                                                  runtime_api.value_struct_type,
+                                                                  true,
+                                                                  llvm::GlobalValue::PrivateLinkage,
+                                                                  nullptr);
+                        }
+                        else
+                        {
+                            constant_map[instruction.get_value().get_string()] =
+                                                builder.CreateAlloca(runtime_api.value_struct_type);
+
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::read_variable:
+                        {
+                            // Create the basic blocks for the instructions.
+                            std::stringstream stream;
+
+                            stream << "block_" << block_index;
+                            ++block_index;
+
+                            auto block_a = llvm::BasicBlock::Create(context,
+                                                                    stream.str(),
+                                                                    function);
+
+                            std::stringstream stream_b;
+
+                            stream_b << "block_" << block_index;
+                            ++block_index;
+
+                            auto block_b = llvm::BasicBlock::Create(context,
+                                                                    stream_b.str(),
+                                                                    function);
+
+                            var_read_blocks[i] = { block_a, block_b, nullptr };
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::write_variable:
+                        {
+                            std::stringstream stream;
+
+                            stream << "block_" << block_index;
+                            ++block_index;
+
+                            auto block_a = llvm::BasicBlock::Create(context,
+                                                                    stream.str(),
+                                                                    function);
+
+                            std::stringstream stream_b;
+
+                            stream_b << "block_" << block_index;
+                            ++block_index;
+
+                            auto block_b = llvm::BasicBlock::Create(context,
+                                                                    stream_b.str(),
+                                                                    function);
+
+                            std::stringstream stream_c;
+
+                            stream_c << "block_" << block_index;
+                            ++block_index;
+
+                            auto block_c = llvm::BasicBlock::Create(context,
+                                                                    stream_c.str(),
+                                                                    function);
+
+                            var_read_blocks[i] = { block_a, block_b, block_c };
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::execute:
+                    case byte_code::Instruction::Id::jump_loop_start:
+                    case byte_code::Instruction::Id::jump_loop_exit:
+                    case byte_code::Instruction::Id::jump_target:
+                        {
+                            // Create the basic blocks for the instructions.
+                            std::stringstream stream;
+
+                            stream << "block_" << block_index;
+                            ++block_index;
+
+                            blocks[i] =
+                                    llvm::BasicBlock::Create(context,
+                                                             stream.str(),
+                                                             builder.GetInsertBlock()->getParent());
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::jump_if_zero:
+                    case byte_code::Instruction::Id::jump_if_not_zero:
+                        {
+                            // These instructions have two jumps.  One jump for the pop error check
+                            // and one for the actual jump.  So we create two blocks for each of
+                            // these jump instructions.
+                            std::stringstream stream;
+
+                            stream << "block_" << block_index;
+                            ++block_index;
+
+                            auto block_a = llvm::BasicBlock::Create(context,
+                                                                    stream.str(),
+                                                                    function);
+
+                            std::stringstream stream_b;
+
+                            stream_b << "block_" << block_index;
+                            ++block_index;
+
+                            auto block_b = llvm::BasicBlock::Create(context,
+                                                                    stream_b.str(),
+                                                                    function);
+
+                            auto_jump_blocks[i] = { block_a, block_b };
+                        }
+                        break;
+
+                    default:
+                        // Nothing to do here.
+                        break;
+                }
+            }
+
+            // Register the block of variables with the runtime.
+            if (!variable_map.empty())
+            {
+                auto value_array_type = llvm::ArrayType::get(runtime_api.value_struct_ptr_type,
+                                                             variable_map.size());
+                auto block_array = builder.CreateAlloca(value_array_type);
+
+                int var_index = 0;
+
+                for (const auto& [_, variable] : variable_map)
+                {
+                    auto array_ptr = builder.CreateStructGEP(value_array_type,
+                                                            block_array,
+                                                            var_index);
+                    builder.CreateStore(variable.variable, array_ptr);
+
+                    // TODO: Write code to populate the variable's index value.
+
+                    var_index++;
+                }
+
+                auto array_ptr = builder.CreateStructGEP(value_array_type, block_array, 0);
+                builder.CreateCall(runtime_api.allocate_variable_block,
+                                { array_ptr, builder.getInt64(variable_map.size()) });
+            }
+
+            // Create the block to handle errors.
+            auto exit_error_block = llvm::BasicBlock::Create(context, "error_block", function);
+
+            // Create the end block of the function.
+            auto exit_block = llvm::BasicBlock::Create(context, "exit_block", function);
+
+            // Register our block of variables with the runtime.
+
+            // Second pass...
+            //
+            // Now we can generate the LLVM IR for the byte-code block.
+            for (size_t i = 0; i < code.size(); ++i)
+            {
+                const auto& instruction = code[i];
+
+                switch (instruction.get_id())
+                {
+                    case byte_code::Instruction::Id::def_variable:
+                        {
+                            auto& variable_info
+                                               = variable_map[instruction.get_value().get_string()];
+
+                            builder.CreateCall(runtime_api.initialize_variable,
+                                               { variable_info.variable });
+
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::def_constant:
+                        {
+                            auto name = instruction.get_value().get_string();
+                            auto iterator = constant_map.find(name);
+
+                            if (iterator != constant_map.end())
+                            {
+                                builder.CreateCall(runtime_api.initialize_variable,
+                                                { iterator->second });
+                            }
+                            else
+                            {
+                                auto global = global_constant_map[name];
+                                builder.CreateCall(runtime_api.initialize_variable, { global });
+                            }
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::read_variable:
+                        {
+                            auto index_value = builder.CreateAlloca(int64_type);
+                            auto pop_result = builder.CreateCall(runtime_api.stack_pop_int,
+                                                                 { index_value });
+
+                            auto [ next_block_a, next_block_b, _ ] = var_read_blocks[i];
+
+                            // Jump to the catch block if there is one, or the exit block if not.
+                            auto error_block = catch_markers.empty()
+                                                ? exit_error_block
+                                                : blocks[catch_markers.back()];
+
+                            auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                            builder.CreateCondBr(cmp, error_block, next_block_a);
+
+                            builder.SetInsertPoint(next_block_a);
+
+                            auto variable_temp = builder.CreateAlloca(runtime_api.value_struct_type);
+                            builder.CreateCall(runtime_api.initialize_variable, { variable_temp });
+
+                            auto index = builder.CreateLoad(int64_type, index_value);
+                            auto read_result = builder.CreateCall(runtime_api.read_variable,
+                                                                  { index, variable_temp });
+
+                            cmp = builder.CreateICmpNE(read_result, builder.getInt1(0));
+                            builder.CreateCondBr(cmp, error_block, next_block_b);
+
+                            builder.SetInsertPoint(next_block_b);
+
+                            builder.CreateCall(runtime_api.stack_push, { variable_temp });
+                            builder.CreateCall(runtime_api.free_variable, { variable_temp });
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::write_variable:
+                        {
+                            auto index_value = builder.CreateAlloca(int64_type);
+                            auto pop_result = builder.CreateCall(runtime_api.stack_pop_int,
+                                                                 { index_value });
+
+
+                            auto [ next_block_a, next_block_b, next_block_c ] = var_read_blocks[i];
+
+                            // Jump to the catch block if there is one, or the exit block if not.
+                            auto error_block = catch_markers.empty()
+                                                ? exit_error_block
+                                                : blocks[catch_markers.back()];
+                            auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                            builder.CreateCondBr(cmp, error_block, next_block_a);
+
+                            builder.SetInsertPoint(next_block_a);
+
+                            auto variable_temp =
+                                                builder.CreateAlloca(runtime_api.value_struct_type);
+                            builder.CreateCall(runtime_api.initialize_variable, { variable_temp });
+
+                            pop_result = builder.CreateCall(runtime_api.stack_pop,
+                                                            { variable_temp });
+
+                            cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                            builder.CreateCondBr(cmp, error_block, next_block_b);
+
+                            builder.SetInsertPoint(next_block_b);
+
+                            auto index = builder.CreateLoad(int64_type, index_value);
+                            auto write_result = builder.CreateCall(runtime_api.write_variable,
+                                                                   { index, variable_temp });
+                            builder.CreateCall(runtime_api.free_variable, { variable_temp });
+
+                            cmp = builder.CreateICmpNE(write_result, builder.getInt1(0));
+                            builder.CreateCondBr(cmp, error_block, next_block_c);
+
+                            builder.SetInsertPoint(next_block_c);
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::execute:
+                        {
+                            auto& value = instruction.get_value();
+
+                            if (value.is_string())
+                            {
+                                auto name = value.get_string();
+
+                                auto var_iter = variable_map.find(name);
+                                auto const_iter = constant_map.find(name);
+                                auto global_iter = global_constant_map.find(name);
+
+                                if (var_iter != variable_map.end())
+                                {
+                                    auto variable_index =
+                                                builder.CreateLoad(int64_type,
+                                                                   var_iter->second.variable_index);
+                                    builder.CreateCall(runtime_api.stack_push_int,
+                                                       { variable_index });
+                                }
+                                else if (const_iter != constant_map.end())
+                                {
+                                    builder.CreateCall(runtime_api.stack_push,
+                                                       { const_iter->second });
+                                }
+                                else if (global_iter != global_constant_map.end())
+                                {
+                                    builder.CreateCall(runtime_api.stack_push,
+                                                       { global_iter->second });
+                                }
+                                else
+                                {
+                                    throw_error("Word " + name + " not found for execution.");
+                                }
+
+                                builder.CreateBr(blocks[i]);
+                                builder.SetInsertPoint(blocks[i]);
+
+                                // TODO: Check if it's a constant or variable index word.
+                                // throw_error("Word " + name + " not found for execution.");
+                            }
+                            else if (value.is_numeric())
+                            {
+                                auto index = value.get_int();
+
+                                if (   (index < 0)
+                                    || (index >= collection.words.size()))
+                                {
+                                    throw_error("Word index " + std::to_string(index) +
+                                                " out of range.");
+                                }
+
+                                auto handler = collection.words[index].function;
+                                auto result = builder.CreateCall(handler, {});
+
+                                // Check the result of the call instruction and branch to the next
+                                // if no errors were raised, otherwise branch to the either the
+                                // exit block or the exception handler block.
+                                auto next_block = blocks[i];
+
+                                // Jump to the catch block if there is one, or the exit block if
+                                // not.
+                                auto error_block = catch_markers.empty()
+                                                    ? exit_error_block
+                                                    : blocks[catch_markers.back()];
+                                auto cmp = builder.CreateICmpNE(result, builder.getInt1(0));
+                                builder.CreateCondBr(cmp, error_block, next_block);
+
+                                // We're done with the current block, so move on to the next one.
+                                builder.SetInsertPoint(next_block);
+                            }
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::word_index:
+                        {
+                            auto word_name = instruction.get_value().get_string();
+                            auto exists = collection.word_map.find(word_name);
+
+                            if (exists == collection.word_map.end())
+                            {
+                                throw_error("Word " + word_name + " not found for indexing.");
+                            }
+
+                            auto word_info = collection.words[exists->second];
+
+                            auto index = exists->second;
+                            auto index_const = builder.getInt64(index);
+
+                            builder.CreateCall(runtime_api.stack_push_int, { index_const });
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::word_exists:
+                        {
+                            auto exists = collection.word_map
+                                                    .find(instruction.get_value().get_string())
+                                                    != collection.word_map.end();
+
+                            auto exists_const = llvm::ConstantInt::get(bool_type, exists);
+                            builder.CreateCall(runtime_api.stack_push_bool, { exists_const });
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::push_constant_value:
+                        {
+                            // Get the value to push from the instruction.
+                            auto& value = code[i].get_value();
+
+                            // Check the type of the value.  If it's one of the simple types
+                            // directly generate the code to push it's value onto the stack.
+                            if (value.is_bool())
+                            {
+                                auto bool_value = value.get_bool();
+                                auto bool_const = llvm::ConstantInt::get(bool_type, bool_value);
+                                builder.CreateCall(runtime_api.stack_push_bool,
+                                                    { bool_const });
+                            }
+                            else if (value.is_int())
+                            {
+                                auto int_value = value.get_int();
+                                auto int_const = llvm::ConstantInt::get(int64_type, int_value);
+                                builder.CreateCall(runtime_api.stack_push_int,
+                                                    { int_const });
+                            }
+                            else if (value.is_double())
+                            {
+                                auto double_value = value.get_double();
+                                auto double_const = llvm::ConstantFP::get(double_type,
+                                                                            double_value);
+                                builder.CreateCall(runtime_api.stack_push_double,
+                                                    { double_const });
+                            }
+                            else if (value.is_string())
+                            {
+                                auto string_value = value.get_string();
+                                auto string_ptr = define_string_constant(string_value,
+                                                                            builder,
+                                                                            module,
+                                                                            context);
+                                builder.CreateCall(runtime_api.stack_push_string,
+                                                    { string_ptr });
+                            }
+                            else
+                            {
+                                // The value is a complex type that we can't inline in the JITed
+                                // code directly.  So we'll add it to the constants array and
+                                // generate code to push the value from the array onto the
+                                // stack.
+                                /*auto index = constants.size();
+                                constants.push_back(value);
+
+                                auto index_const = builder.getInt64(index);
+                                builder.CreateCall(handle_push_value_fn,
+                                                    { runtime_ptr,
+                                                        constant_arr_ptr,
+                                                        index_const });*/
+                                throw_error("TODO: Implement complex constant types.");
+                            }
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::mark_loop_exit:
+                        {
+                            // Capture the start and end indexes of the loop for later use.
+                            auto start_index = i + 1;
+                            auto end_index = i + code[i].get_value().get_int();
+
+                            loop_markers.push_back({ start_index, end_index });
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::unmark_loop_exit:
+                        {
+                            // Clear the current loop markers.
+                            loop_markers.pop_back();
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::mark_catch:
+                        {
+                            // Capture the index of the catch block for later use.
+                            auto target_index = i + code[i].get_value().get_int();
+
+                            catch_markers.push_back(target_index);
+                            catch_target_markers.insert(target_index);
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::unmark_catch:
+                        {
+                            // Clear the current catch markers so that we don't jump to then.
+                            // Note that we leave the catch_target_markers set alone so that we
+                            // can generate the code to push the exception onto the stack when
+                            // we reach the catch target instruction.
+                            catch_markers.pop_back();
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::mark_context:
+                        // TODO: Implement this.
+                        break;
+
+                    case byte_code::Instruction::Id::release_context:
+                        // TODO: Implement this.
+                        break;
+
+                    case byte_code::Instruction::Id::jump:
+                        {
+                            // Jump to the target block.
+                            auto index = i + code[i].get_value().get_int();
+                            builder.CreateBr(blocks[index]);
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::jump_if_zero:
+                        {
+                            // Convert the relative index to an absolute index.
+                            auto index = i + code[i].get_value().get_int();
+
+                            // Allocate a bool to hold the test value.  Then call the
+                            // handle_pop_bool function to get the value from the stack.
+                            auto test_value = builder.CreateAlloca(bool_type);
+                            auto pop_result = builder.CreateCall(runtime_api.stack_pop_bool,
+                                                                { test_value });
+
+                            // Check the result of the call instruction and branch to the next
+                            // block if no errors were raised, otherwise branch to the either
+                            // the exit block or the exception handler block.
+                            auto error_block = catch_markers.empty()
+                                                ? exit_error_block
+                                                : blocks[catch_markers.back()];
+
+                            auto [ a, b ] = auto_jump_blocks[i];
+
+                            auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                            builder.CreateCondBr(cmp, error_block, a);
+
+                            // The pop was successful, so switch to the next block and generate
+                            // the code to perform the jump based on the test value.
+                            builder.SetInsertPoint(a);
+
+                            // Jump to the 'success' block if the test value is true, otherwise
+                            // jump to the 'fail' block.
+                            auto read_value = builder.CreateLoad(bool_type, test_value);
+
+                            builder.CreateCondBr(read_value, b, blocks[index]);
+                            builder.SetInsertPoint(b);
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::jump_if_not_zero:
+                        {
+                            // Convert the relative index to an absolute index.
+                            auto index = i + code[i].get_value().get_int();
+
+                            // Allocate a bool to hold the test value.  Then call the
+                            // handle_pop_bool function to get the value from the stack.
+                            auto test_value = builder.CreateAlloca(bool_type);
+                            auto pop_result = builder.CreateCall(runtime_api.stack_pop_bool,
+                                                                { test_value });
+
+                            // Check the result of the call instruction and branch to the next
+                            // block if no errors were raised, otherwise branch to the either
+                            // the exit block or the exception handler block.
+                            auto error_block = catch_markers.empty()
+                                                ? exit_error_block
+                                                : blocks[catch_markers.back()];
+
+                            auto [ a, b ] = auto_jump_blocks[i];
+
+                            auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                            builder.CreateCondBr(cmp, error_block, a);
+
+                            // The pop was successful, so switch to the next block and generate
+                            // the code to perform the jump based on the test value.
+                            builder.SetInsertPoint(a);
+
+                            // Jump to the 'success' block if the test value is true, otherwise
+                            // jump to the 'fail' block.
+                            auto read_value = builder.CreateLoad(bool_type, test_value);
+                            builder.CreateCondBr(read_value, blocks[index], b);
+                            builder.SetInsertPoint(b);
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::jump_loop_start:
+                        {
+                            // Jump to the start block of the loop.
+                            auto start_index = loop_markers.back().first;
+
+                            builder.CreateBr(blocks[start_index]);
+                            builder.SetInsertPoint(blocks[i]);
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::jump_loop_exit:
+                        {
+                            // Jump to the end block of the loop.
+                            auto end_index = loop_markers.back().second;
+                            builder.CreateBr(blocks[end_index]);
+                            builder.SetInsertPoint(blocks[i]);
+                        }
+                        break;
+
+                    case byte_code::Instruction::Id::jump_target:
+                        // Make sure that the current block has a terminator instruction, if
+                        // not, add one to jump to the next block.  This is because this
+                        // would be a natural follow through in the original byte-code.
+                        if (builder.GetInsertBlock()->getTerminator() == nullptr)
+                        {
+                            builder.CreateBr(blocks[i]);
+                        }
+
+                        // We're done with the current block, switch over to the next.
+                        builder.SetInsertPoint(blocks[i]);
+
+
+                        // If this is a catch target, we need to generate the code to push
+                        // the exception onto the stack and clear the last exception.
+                        if (   (!catch_target_markers.empty())
+                            && (catch_target_markers.find(i) != catch_target_markers.end()))
+                        {
+                            auto last_error = builder.CreateCall(runtime_api.get_last_error, {});
+
+                            builder.CreateCall(runtime_api.stack_push_string, { last_error });
+                            builder.CreateCall(runtime_api.clear_last_error, {});
+                        }
+                        break;
+                }
+            }
+
+
+            // Make sure that the last block has a terminator instruction, if not, add one to
+            // jump to the exit block.
+            if (builder.GetInsertBlock()->getTerminator() == nullptr)
+            {
+                builder.CreateBr(exit_block);
+            }
+
+            // If an error occurs set the return value to true.
+            builder.SetInsertPoint(exit_error_block);
+            builder.CreateStore(builder.getInt1(1), return_value_variable);
+            builder.CreateBr(exit_block);
+
+
+            // Make sure that all the auto-jump blocks have a terminator instruction.
+            for (auto block : blocks)
+            {
+                if (block.second->getTerminator() == nullptr)
+                {
+                    builder.SetInsertPoint(block.second);
+                    builder.CreateBr(exit_block);
+                }
+            }
+
+            // We're done with the last user code block, so switch over to the exit block and
+            // generate the code to return from the function.
+            builder.SetInsertPoint(exit_block);
+
+            // Check to see if we needed to allocated a block of variables...
+            if (!variable_map.empty())
+            {
+                // Release the variable block from the runtime.
+                builder.CreateCall(runtime_api.release_variable_block, {});
+            }
+
+            // First off, free all local variables and constants.
+            for (auto iterator = variable_map.begin(); iterator != variable_map.end(); ++iterator)
+            {
+                builder.CreateCall(runtime_api.free_variable, { iterator->second.variable });
+            }
+
+            if (is_top_level)
+            {
+                for (auto iterator = global_constant_map.begin();
+                     iterator != global_constant_map.end();
+                     ++iterator)
+                {
+                    builder.CreateCall(runtime_api.free_variable, { iterator->second });
+                }
+            }
+            else
+            {
+                for (auto iterator = constant_map.begin();
+                     iterator != constant_map.end();
+                     ++iterator)
+                {
+                    builder.CreateCall(runtime_api.free_variable, { iterator->second });
+                }
+            }
+
+            // Return and pass the return value.
+            auto return_value = builder.CreateLoad(bool_type, return_value_variable);
+            builder.CreateRet(return_value);
         }
 
 
@@ -309,7 +1360,9 @@ namespace sorth::compilation
         void compile_used_words(WordCollection& collection,
                                 std::shared_ptr<llvm::Module>& module,
                                 llvm::LLVMContext& context,
-                                llvm::IRBuilder<>& builder)
+                                llvm::IRBuilder<>& builder,
+                                const RuntimeApi& runtime_api,
+                                GlobalMap& global_constant_map)
         {
             for (const auto& word : collection.words)
             {
@@ -318,7 +1371,15 @@ namespace sorth::compilation
                     && (word.code.has_value()))
                 {
                     // Create the word's IR function body.
-                    compile_word(collection, word, module, context, builder);
+                    generate_ir_for_byte_code(collection,
+                                              word.code.value(),
+                                              module,
+                                              context,
+                                              builder,
+                                              word.function,
+                                              global_constant_map,
+                                              runtime_api,
+                                              false);
                 }
             }
         }
@@ -327,11 +1388,13 @@ namespace sorth::compilation
         void compile_top_level_code(const byte_code::ByteCode& top_level_code,
                                     std::shared_ptr<llvm::Module>& module,
                                     llvm::LLVMContext& context,
-                                    llvm::IRBuilder<>& builder)
+                                    llvm::IRBuilder<>& builder,
+                                    const RuntimeApi& runtime_api,
+                                    GlobalMap& global_constant_map)
         {
             // Start off by creating the signature for the top-level function.
             llvm::FunctionType* top_level_signature =
-                                            llvm::FunctionType::get(llvm::Type::getInt8Ty(context),
+                                            llvm::FunctionType::get(llvm::Type::getInt1Ty(context),
                                                                     false);
 
             // Create the function itself.
@@ -346,8 +1409,45 @@ namespace sorth::compilation
             builder.SetInsertPoint(entry_block);
 
             // Generate the return statement for the top-level function.
-            auto ret_val = llvm::ConstantInt::get(builder.getInt8Ty(), EXIT_SUCCESS);
+            auto ret_val = llvm::ConstantInt::get(builder.getInt1Ty(), EXIT_SUCCESS);
             builder.CreateRet(ret_val);
+        }
+
+
+        // Create the word table for the runtime.
+        void create_word_table(const WordCollection& collection,
+                               std::shared_ptr<llvm::Module>& module,
+                               llvm::LLVMContext& context)
+        {
+            auto function_type = llvm::FunctionType::get(llvm::Type::getInt1Ty(context), false);
+            auto function_ptr_type = llvm::PointerType::getUnqual(function_type);
+            auto table_size = collection.words.size();
+
+            auto word_table_type = llvm::ArrayType::get(function_ptr_type, table_size);
+            std::vector<llvm::Constant*> word_table_values;
+
+            for (size_t i = 0; i < table_size; ++i)
+            {
+                auto& word = collection.words[i];
+
+                if (word.was_referenced)
+                {
+                    word_table_values.push_back(word.function);
+                }
+                else
+                {
+                    word_table_values.push_back(llvm::Constant::getNullValue(function_ptr_type));
+                }
+            }
+
+            auto word_table_constant = llvm::ConstantArray::get(word_table_type, word_table_values);
+
+            auto word_table = new llvm::GlobalVariable(*module,
+                                                       word_table_type,
+                                                       true,
+                                                       llvm::GlobalValue::ExternalLinkage,
+                                                       word_table_constant,
+                                                       "word_table");
         }
 
 
@@ -391,6 +1491,9 @@ namespace sorth::compilation
         auto module = std::make_shared<llvm::Module>(script->get_script_path().string(), context);
         llvm::IRBuilder<> builder(context);
 
+        // Register the runtime-library's API with the module.
+        auto runtime_api = register_runtime_api(module);
+
         // Gather all the words from the runtime, the standard library, and the script and it's
         // sub-scripts.
         WordCollection words;
@@ -408,10 +1511,12 @@ namespace sorth::compilation
         // Build up the full top-level code for the script, including any sub-scripts and the
         // standard library.
         byte_code::ByteCode top_level_code;
+        GlobalMap const_map;
 
         collect_top_level_code(standard_library, top_level_code);
         collect_top_level_code(script, top_level_code);
 
+        // Try to resolve all the calls in the top-level code.
         try_resolve_calls(words, top_level_code);
 
         // Now that we have all the top-levels collected, we can go through that code and mark
@@ -420,13 +1525,18 @@ namespace sorth::compilation
         mark_used_words(words, top_level_code);
         create_word_declarations(words, module, context);
 
-        // Compile the function bodies for all used Forth words.
-        compile_used_words(words, module, context, builder);
-
         // Create the script top-level function.  This function will be the entry point for the
         // resulting program.  It'll be made of of all the top level blocks in each of the scripts
         // that we gathered previously.
-        compile_top_level_code(top_level_code, module, context, builder);
+        compile_top_level_code(top_level_code, module, context, builder, runtime_api, const_map);
+
+        // Compile the function bodies for all used Forth words.
+        compile_used_words(words, module, context, builder, runtime_api, const_map);
+
+
+        // Create the word_table for the runtime.
+        create_word_table(words, module, context);
+
 
         // Now that all code has been generated, verify that the module is well-formed.
         if (verifyModule(*module, &llvm::errs()))
@@ -455,7 +1565,7 @@ namespace sorth::compilation
         // Set the module's target triple and data layout.
         llvm::TargetOptions options;
 
-        auto reloc_model = std::optional<llvm::Reloc::Model>();
+        auto reloc_model = std::optional<llvm::Reloc::Model>(llvm::Reloc::PIC_);
         auto target_machine = target->createTargetMachine(target_triple,
                                                           "generic",
                                                           "",

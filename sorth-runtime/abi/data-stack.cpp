@@ -71,4 +71,48 @@ extern "C"
     }
 
 
+    int8_t stack_pop_int(int64_t* value)
+    {
+        if (data_stack.empty())
+        {
+            set_last_error("Stack underflow.");
+            return 1;
+        }
+
+        auto new_value = data_stack.back();
+        data_stack.pop_back();
+
+        if (!new_value.is_numeric())
+        {
+            set_last_error("Value is not an integer.");
+            return 1;
+        }
+
+        *value = new_value.get_int();
+
+        return 0;
+    }
+
+
+    int8_t stack_pop_bool(bool* value)
+    {
+        if (data_stack.empty())
+        {
+            return 1;
+        }
+
+        auto new_value = data_stack.back();
+        data_stack.pop_back();
+
+        if (!new_value.is_numeric())
+        {
+            return 1;
+        }
+
+        *value = new_value.get_bool();
+
+        return 0;
+    }
+
+
 }

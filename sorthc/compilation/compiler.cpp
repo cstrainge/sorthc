@@ -25,7 +25,7 @@ namespace sorth::compilation
         // Ask the runtime to byte-code compile the script.
         auto script = runtime.compile_script(source_path);
 
-        for (const auto& word : script->get_words())
+        /*for (const auto& word : script->get_words())
         {
             std::cout << "Word: " << word.get_name() << std::endl
                       << pretty_print(runtime, word.get_code())
@@ -34,7 +34,7 @@ namespace sorth::compilation
 
         std::cout << "<top-level>" << std::endl
                   << pretty_print(runtime, script->get_top_level())
-                  << std::endl;
+                  << std::endl;*/
 
         // Now that the script and it's sub-scripts are byte-code compiled, we can generate the LLVM
         // IR for it.  Then we can compile  the LLVM IR to native code into an object file that can

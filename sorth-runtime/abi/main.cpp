@@ -12,6 +12,12 @@ extern "C" int8_t script_top_level(void);
 extern "C" void stack_initialize(void);
 
 
+extern "C" bool is_error_set(void);
+
+
+extern "C" const char* get_last_error(void);
+
+
 // This function is also defined in sorth-runtime.lib.
 namespace sorth::run_time::abi::words
 {
@@ -37,6 +43,12 @@ int main(int argc, char* argv[])
         // Call the generated top level of the user code, and report any errors that were raised by
         // the user code, if any.
         result = script_top_level();
+
+        if (   (result)
+            && (is_error_set()))
+        {
+            std::cerr << "Error: " << get_last_error() << std::endl;
+        }
     }
     catch (const std::exception& error)
     {

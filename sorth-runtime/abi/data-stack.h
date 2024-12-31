@@ -28,4 +28,9 @@ extern "C"
     int8_t stack_pop(sorth::run_time::data_structures::Value* value);
 
 
+    int8_t stack_pop_int(int64_t* value);
+
+
+    int8_t stack_pop_bool(bool* value);
+
 }

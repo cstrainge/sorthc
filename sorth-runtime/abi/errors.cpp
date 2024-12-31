@@ -39,6 +39,12 @@ extern "C"
     }
 
 
+    bool is_error_set()
+    {
+        return last_error.has_value();
+    }
+
+
     void clear_last_error()
     {
         last_error.reset();

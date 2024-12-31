@@ -11,26 +11,26 @@ namespace sorth::compilation::byte_code
     {
         switch (id)
         {
-            case Instruction::Id::def_variable:        stream << "def_variable       "; break;
-            case Instruction::Id::def_constant:        stream << "def_constant       "; break;
-            case Instruction::Id::read_variable:       stream << "read_variable      "; break;
-            case Instruction::Id::write_variable:      stream << "write_variable     "; break;
-            case Instruction::Id::execute:             stream << "execute            "; break;
-            case Instruction::Id::word_index:          stream << "word_index         "; break;
-            case Instruction::Id::word_exists:         stream << "word_exists        "; break;
+            case Instruction::Id::def_variable:        stream << "def_variable"; break;
+            case Instruction::Id::def_constant:        stream << "def_constant"; break;
+            case Instruction::Id::read_variable:       stream << "read_variable"; break;
+            case Instruction::Id::write_variable:      stream << "write_variable"; break;
+            case Instruction::Id::execute:             stream << "execute"; break;
+            case Instruction::Id::word_index:          stream << "word_index"; break;
+            case Instruction::Id::word_exists:         stream << "word_exists"; break;
             case Instruction::Id::push_constant_value: stream << "push_constant_value"; break;
-            case Instruction::Id::mark_loop_exit:      stream << "mark_loop_exit     "; break;
-            case Instruction::Id::unmark_loop_exit:    stream << "unmark_loop_exit   "; break;
-            case Instruction::Id::mark_catch:          stream << "mark_catch         "; break;
-            case Instruction::Id::unmark_catch:        stream << "unmark_catch       "; break;
-            case Instruction::Id::mark_context:        stream << "mark_context       "; break;
-            case Instruction::Id::release_context:     stream << "release_context    "; break;
-            case Instruction::Id::jump:                stream << "jump               "; break;
-            case Instruction::Id::jump_if_zero:        stream << "jump_if_zero       "; break;
-            case Instruction::Id::jump_if_not_zero:    stream << "jump_if_not_zero   "; break;
-            case Instruction::Id::jump_loop_start:     stream << "jump_loop_start    "; break;
-            case Instruction::Id::jump_loop_exit:      stream << "jump_loop_exit     "; break;
-            case Instruction::Id::jump_target:         stream << "jump_target        "; break;
+            case Instruction::Id::mark_loop_exit:      stream << "mark_loop_exit"; break;
+            case Instruction::Id::unmark_loop_exit:    stream << "unmark_loop_exit"; break;
+            case Instruction::Id::mark_catch:          stream << "mark_catch"; break;
+            case Instruction::Id::unmark_catch:        stream << "unmark_catch"; break;
+            case Instruction::Id::mark_context:        stream << "mark_context"; break;
+            case Instruction::Id::release_context:     stream << "release_context"; break;
+            case Instruction::Id::jump:                stream << "jump"; break;
+            case Instruction::Id::jump_if_zero:        stream << "jump_if_zero"; break;
+            case Instruction::Id::jump_if_not_zero:    stream << "jump_if_not_zero"; break;
+            case Instruction::Id::jump_loop_start:     stream << "jump_loop_start"; break;
+            case Instruction::Id::jump_loop_exit:      stream << "jump_loop_exit"; break;
+            case Instruction::Id::jump_target:         stream << "jump_target"; break;
         }
 
         return stream;
