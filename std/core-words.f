@@ -426,8 +426,8 @@
 
 : over description: "Duplicate the second item on the stack."
        signature: "a b -- a b a"
-    variable! b
     variable! a
+    variable! b
 
     a @
     b @
@@ -442,9 +442,9 @@
     variable! b
     variable! a
 
+    c @
     a @
     b @
-    c @
 ;
 
 

@@ -36,7 +36,6 @@ namespace
 }
 
 
-
 extern "C"
 {
 
