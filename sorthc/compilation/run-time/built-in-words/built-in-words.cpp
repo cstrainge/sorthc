@@ -406,6 +406,20 @@ namespace sorth::compilation::run_time::built_in_words
                 // It's a run-time word, so add the word to the word cache, for later compilation
                 // into the final executable.
                 runtime.get_compile_context().add_script_word(construction);
+
+                std::optional<byte_code::ByteCode> code = construction.get_code();
+
+                if (runtime.get_is_building_runtime())
+                {
+                    runtime.add_word(construction.get_name(),
+                                    construction.get_location(),
+                                    nullptr,
+                                    construction.get_execution_context(),
+                                    construction.get_visibility(),
+                                    compilation::WordType::scripted,
+                                    construction.get_context_management(),
+                                    code);
+                }
             }
         }
 
@@ -639,6 +653,17 @@ namespace sorth::compilation::run_time::built_in_words
         }
 
 
+        void logic_op(CompilerRuntime& runtime, std::function<bool(bool, bool)> op)
+        {
+            auto b = runtime.pop_as_bool();
+            auto a = runtime.pop_as_bool();
+
+            auto result = op(a, b);
+
+            runtime.push(result);
+        }
+
+
         void word_add(CompilerRuntime& runtime)
         {
             string_or_numeric_op(runtime,
@@ -678,6 +703,25 @@ namespace sorth::compilation::run_time::built_in_words
             auto a = runtime.pop_as_integer();
 
             runtime.push(a % b);
+        }
+
+
+        void word_logic_and(CompilerRuntime& runtime)
+        {
+            logic_op(runtime, [](auto a, auto b) { return a && b; });
+        }
+
+
+        void word_logic_or(CompilerRuntime& runtime)
+        {
+            logic_op(runtime, [](auto a, auto b) { return a || b; });
+        }
+
+
+        void word_logic_not(CompilerRuntime& runtime)
+        {
+            auto value = runtime.pop_as_bool();
+            runtime.push(!value);
         }
 
 
@@ -995,6 +1039,11 @@ namespace sorth::compilation::run_time::built_in_words
         ADD_NATIVE_WORD(runtime, "*", word_multiply);
         ADD_NATIVE_WORD(runtime, "/", word_divide);
         ADD_NATIVE_WORD(runtime, "%", word_mod);
+
+        // Logic words.
+        ADD_NATIVE_WORD(runtime, "&&", word_logic_and);
+        ADD_NATIVE_WORD(runtime, "||", word_logic_or);
+        ADD_NATIVE_WORD(runtime, "'", word_logic_not);
 
         // Define new structures.
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "#", word_data_definition);

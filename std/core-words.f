@@ -402,84 +402,6 @@
 
 
 
-: # immediate description: "Beginning of a structure definition."
-              signature: "# name field_name [ -> default_value ] ... ;"
-    word variable! struct_name
-    false variable! is_hidden
-    variable field_name
-
-    0 [].new variable! fields
-    0 variable! index
-
-    false variable! found_initializers
-
-    code.new_block
-
-    begin
-        true
-    while
-        word field_name !
-
-        field_name @
-        case
-            "hidden" of
-                    true is_hidden !
-                    continue
-                endof
-
-            "(" of
-                    "(" execute
-                    continue
-                endof
-
-            "->" of
-                    true found_initializers !
-
-                    "dup" op.execute
-                    ";" "," 2 code.compile_until_words
-
-                    "swap" op.execute
-                    index @ -- op.push_constant_value
-                    "swap" op.execute
-                    "[]!" op.execute
-
-                    ";" =
-                    if
-                        break
-                    then
-                endof
-
-            ";" of
-                    break
-                endof
-
-            index @ 1 + fields [].size!!
-
-            field_name @ fields [ index @ ]!!
-
-            index @ 1 + index !
-        endcase
-    repeat
-
-    struct_name @        op.push_constant_value
-    fields @             op.push_constant_value
-    is_hidden @          op.push_constant_value
-    found_initializers @ op.push_constant_value
-
-    ( If we found any initializer code, pop it off the construction stack onto the main stack for )
-    ( the base structure definition word to use. )
-    found_initializers @
-    if
-        code.pop_stack_block
-    else
-        code.drop_stack_block
-    then
-
-    "sorth.define_struct" op.execute
-;
-
-
-
 ( Some useful stack management words. )
 
 
@@ -498,6 +420,31 @@
 
     b @
     a @
+;
+
+
+
+: over description: "Duplicate the second item on the stack."
+       signature: "a b -- a b a"
+    variable! b
+    variable! a
+
+    a @
+    b @
+    a @
+;
+
+
+
+: rot description: "Rotate the top three items on the stack."
+      signature: "a b c -- b c a"
+    variable! c
+    variable! b
+    variable! a
+
+    a @
+    b @
+    c @
 ;
 
 
@@ -663,6 +610,13 @@
 
 
 
+: <> description: "Compare two values for inequality."
+     signature: "a b -- are-not-equal?"
+    = '
+;
+
+
+
 : ++  description: "Increment a value on the stack."
       signature: "value -- incremented"
     1 +
@@ -687,6 +641,41 @@
 : --!  description: "Decrement the given variable."
        signature: "variable -- "
     dup @ -- swap !
+;
+
+
+
+: 0>  description: "Is the value greater than 0?"
+      signature: "value -- test_result"
+    0 >
+;
+
+
+
+: 0=  description: "Does the value equal 0?"
+      signature: "value -- test_result"
+    0 =
+;
+
+
+
+: 0<  description: "Is the value less than 0?"
+      signature: "value -- test_result"
+    0 <
+;
+
+
+
+: 0>=  description: "Is the value greater or equal to 0?"
+       signature: "value -- test_result"
+    0 >=
+;
+
+
+
+: 0<=  description: "Is the value less than or equal to 0?"
+       signature: "value -- test_result"
+    0 <=
 ;
 
 
@@ -725,7 +714,3 @@
     sorth.os  "Linux"  =
 ;
 
-
-
-
-[include] array.f

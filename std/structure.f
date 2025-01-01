@@ -33,13 +33,13 @@
             "->" of
                     true found_initializers !
 
-                    ` dup op.execute
+                    "dup" op.execute
                     ";" "," 2 code.compile_until_words
 
-                    ` swap op.execute
+                    "swap" op.execute
                     index @ -- op.push_constant_value
-                    ` swap op.execute
-                    ` []! op.execute
+                    "swap" op.execute
+                    "[]!" op.execute
 
                     ";" =
                     if
@@ -72,7 +72,7 @@
     is_hidden @          op.push_constant_value
     found_initializers @ op.push_constant_value
 
-    ` # op.execute
+    "#" op.execute
 
     code.merge_stack_block
 ;
@@ -108,10 +108,10 @@
         "," "}" 2 code.compile_until_words
         next_word !
 
-        ` swap op.execute
-        ` over op.execute
+        "swap" op.execute
+        "over" op.execute
         struct_name @ "." + field_name @ + op.execute
-        ` swap op.execute
-        ` #! op.execute
+        "swap" op.execute
+        "#!" op.execute
     repeat
 ;

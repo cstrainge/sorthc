@@ -32,24 +32,24 @@
     case
         "->"  of  true is_inline_syntax !                 endof
         "}"   of  ( "Missing word -> and key value." throw )  endof
-        "}!"  of  ` {}!  command !                        endof
-        "}!!" of  ` {}!! command !                        endof
-        "}@"  of  ` {}@  command !                        endof
-        "}@@" of  ` {}@@ command !                        endof
+        "}!"  of  "{}!"  command !                        endof
+        "}!!" of  "{}!!" command !                        endof
+        "}@"  of  "{}@"  command !                        endof
+        "}@@" of  "{}@@" command !                        endof
     endcase
 
     false is_inline_syntax @ =
     if
-        ` swap op.execute
+        "swap" op.execute
         command @ op.execute
     else
-        ` {}.new op.execute
-        ` over op.execute
+        "{}.new" op.execute
+        "over" op.execute
         "," "}" 2 code.compile_until_words
-        ` rot op.execute
-        ` {}! op.execute
+        "rot" op.execute
+        "{}!" op.execute
 
-        ` dup op.execute
+        "dup" op.execute
 
         "}" <>
         if
@@ -57,11 +57,11 @@
                 "->" "}" 2 code.compile_until_words
                 "->" =
             while
-                ` swap op.execute
+                "swap" op.execute
                 "," "}" 2 code.compile_until_words
-                ` rot op.execute
-                ` {}! op.execute
-                ` dup op.execute
+                "rot" op.execute
+                "{}!" op.execute
+                "dup" op.execute
 
                 "}" =
                 if
@@ -70,7 +70,7 @@
             repeat
         then
 
-        ` drop op.execute
+        "drop" op.execute
     then
 ;
 

@@ -67,6 +67,10 @@ namespace sorth::compilation::byte_code
             Jit& operator =(Jit&& jit) = delete;
 
         public:
+            run_time::WordHandler jit_compile(run_time::CompilerRuntime& runtime,
+                                              const std::string& name,
+                                              const ByteCode& code);
+
             // JIT compile a word construction into native code and register it for running within
             // the compiler's runtime.  This can be an immediate word or run-time word intended for
             // use by immediate words.
@@ -78,8 +82,7 @@ namespace sorth::compilation::byte_code
             //
             // The immediate words would have already been compiled and registered with the
             // compiler's runtime.
-            run_time::WordHandler jit_compile(run_time::CompilerRuntime& runtime,
-                                              const ScriptPtr& script);
+            void jit_compile(run_time::CompilerRuntime& runtime, const ScriptPtr& script);
 
         private:
             // Register the helper function pointers with the JIT engine.

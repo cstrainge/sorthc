@@ -12,9 +12,11 @@ extern "C" int8_t script_top_level(void);
 extern "C" void stack_initialize(void);
 
 
+// Check to see if an error has been set in the run-time.
 extern "C" bool is_error_set(void);
 
 
+// Get the last error message that was set in the run-time.
 extern "C" const char* get_last_error(void);
 
 

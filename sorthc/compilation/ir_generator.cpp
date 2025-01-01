@@ -120,7 +120,6 @@ namespace sorth::compilation
             // Add a native word to our collection.
             void add_word(const std::string& name, const std::string& handler_name)
             {
-std::cerr << "add_word: " << name << std::endl;
                 WordInfo info;
 
                 info.name = name;
@@ -136,7 +135,6 @@ std::cerr << "add_word: " << name << std::endl;
             // Add a Forth word to our collection.
             void add_word(const byte_code::Construction& word)
             {
-std::cerr << "add_word: " << word.get_name() << std::endl;
                 // Cache the word's name.
                 const auto& name = word.get_name();
 
@@ -613,12 +611,13 @@ std::cerr << "add_word: " << word.get_name() << std::endl;
         // Generate the LLVM IR for a byte-code block.  This can be used for both Forth words and
         // the top-level script code.
         void generate_ir_for_byte_code(WordCollection& collection,
+                                       const std::string& word_name,
                                        const byte_code::ByteCode& code,
                                        std::shared_ptr<llvm::Module>& module,
                                        llvm::LLVMContext& context,
                                        llvm::IRBuilder<>& builder,
                                        llvm::Function* function,
-                                       GlobalMap global_constant_map,
+                                       GlobalMap& global_constant_map,
                                        const RuntimeApi& runtime_api,
                                        bool is_top_level)
         {
@@ -692,12 +691,15 @@ std::cerr << "add_word: " << word.get_name() << std::endl;
                     case byte_code::Instruction::Id::def_constant:
                         if (is_top_level)
                         {
+                            llvm::Constant* zero_init =
+                                    llvm::ConstantAggregateZero::get(runtime_api.value_struct_type);
+
                             global_constant_map[instruction.get_value().get_string()] =
-                                          new llvm::GlobalVariable(*module,
+                                         new llvm::GlobalVariable(*module,
                                                                   runtime_api.value_struct_type,
-                                                                  true,
+                                                                  false,
                                                                   llvm::GlobalValue::PrivateLinkage,
-                                                                  nullptr);
+                                                                  zero_init);
                         }
                         else
                         {
@@ -1030,7 +1032,8 @@ std::cerr << "add_word: " << word.get_name() << std::endl;
                                 }
                                 else
                                 {
-                                    throw_error("Word " + name + " not found for execution.");
+                                    throw_error("Word " + name + " not found for execution, " +
+                                                "referenced by " + word_name + ".");
                                 }
 
                                 builder.CreateBr(blocks[i]);
@@ -1409,6 +1412,7 @@ std::cerr << "add_word: " << word.get_name() << std::endl;
                 {
                     // Create the word's IR function body.
                     generate_ir_for_byte_code(collection,
+                                              word.name,
                                               word.code.value(),
                                               module,
                                               context,
@@ -1442,15 +1446,8 @@ std::cerr << "add_word: " << word.get_name() << std::endl;
                                                                     "script_top_level",
                                                                     module.get());
 
-            /*auto entry_block = llvm::BasicBlock::Create(context, "entry", top_level_function);
-
-            builder.SetInsertPoint(entry_block);
-
-            // Generate the return statement for the top-level function.
-            auto ret_val = llvm::ConstantInt::get(builder.getInt1Ty(), EXIT_SUCCESS);
-            builder.CreateRet(ret_val);*/
-
             generate_ir_for_byte_code(collection,
+                                      "script_top_level",
                                       top_level_code,
                                       module,
                                       context,
@@ -1628,8 +1625,8 @@ std::cerr << "add_word: " << word.get_name() << std::endl;
         module->setTargetTriple(target_triple);
         module->setDataLayout(target_machine->createDataLayout());
 
-        // Print the module to stdout for debugging.
-        module->print(llvm::outs(), nullptr);
+        // Uncomment the following line to print the module to stdout for debugging.
+        // module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;

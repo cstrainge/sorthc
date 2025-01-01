@@ -28,6 +28,9 @@ namespace sorth::compilation::run_time
         // Name of the word.
         std::string name;
 
+        // The byte-code for the word, if it hasn't been jit compiled yet.
+        std::optional<byte_code::ByteCode> code;
+
 
         // The function to call to handle the word.
         WordHandler handler;
@@ -108,6 +111,8 @@ namespace sorth::compilation::run_time
             // Stack of contexts that are being compiled.
             byte_code::ContextStack compile_contexts;
 
+            bool is_building_runtime;
+
         public:
             // Create the compiler run-time and load the standard library from the given system
             // path.
@@ -121,6 +126,8 @@ namespace sorth::compilation::run_time
             CompilerRuntime& operator =(CompilerRuntime&& runtime) = delete;
 
         public:
+            bool get_is_building_runtime() const noexcept;
+
             // Get a reference to the standard library script.
             const byte_code::ScriptPtr& get_standard_library() const noexcept;
 
@@ -175,9 +182,21 @@ namespace sorth::compilation::run_time
                           WordExecutionContext execution_context,
                           WordVisibility visibility,
                           WordType type,
-                          WordContextManagement context_management);
+                          WordContextManagement context_management,
+                          std::optional<byte_code::ByteCode>& code);
 
             // Add a word to the run-time dictionary.
+            void add_word(const std::string& name,
+                          const std::filesystem::path& path,
+                          size_t line,
+                          size_t column,
+                          WordHandler handler,
+                          WordExecutionContext execution_context,
+                          WordVisibility visibility,
+                          WordType type,
+                          WordContextManagement context_management,
+                          std::optional<byte_code::ByteCode>& code);
+
             void add_word(const std::string& name,
                           const std::filesystem::path& path,
                           size_t line,
@@ -249,7 +268,7 @@ namespace sorth::compilation::run_time
             void execute(size_t word_index);
 
             // Execute a word by handler information.
-            void execute(const WordHandlerInfo& info);
+            void execute(WordHandlerInfo& info);
 
         public:
             // Push a new call stack item onto the call stack.

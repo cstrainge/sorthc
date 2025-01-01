@@ -66,6 +66,38 @@ namespace sorth::compilation::byte_code
     }
 
 
+    run_time::WordHandler Jit::jit_compile(run_time::CompilerRuntime& runtime,
+                                           const std::string& name,
+                                           const ByteCode& code)
+    {
+        // Make sure we have a name for the word that's usable for the JIT engine.
+        auto filtered_name = filter_word_name(name);
+
+        // Create the context for this compilation.
+        auto [ module, context ] = create_jit_module_context(filtered_name);
+
+        // Jit compile the word and then finalize it's module.
+        auto [ locations, constants ] = jit_compile_word(runtime,
+                                                         module,
+                                                         context,
+                                                         filtered_name,
+                                                         code,
+                                                         CodeGenType::word);
+
+        // JIT compile and optimize the module, returning the IR for the word.
+        auto ir_map = finalize_module(std::move(module), std::move(context));
+
+        // Finally create and register the word handler with the runtime.
+        auto handler = create_word_function(filtered_name,
+                                            std::move(ir_map[filtered_name]),
+                                            std::move(locations),
+                                            std::move(constants),
+                                            CodeGenType::word);
+
+        return handler;
+    }
+
+
     // JIT compile a word construction into native code and register it for running within the
     // compiler's runtime.  This can be an immediate word or run-time word intended for use by
     // immediate words.
@@ -95,13 +127,16 @@ namespace sorth::compilation::byte_code
                                             std::move(constants),
                                             CodeGenType::word);
 
+        std::optional<byte_code::ByteCode> code;
+
         runtime.add_word(construction.get_name(),
                          construction.get_location(),
                          handler,
                          construction.get_execution_context(),
                          construction.get_visibility(),
                          compilation::WordType::scripted,
-                         construction.get_context_management());
+                         construction.get_context_management(),
+                         code);
     }
 
 
@@ -110,9 +145,14 @@ namespace sorth::compilation::byte_code
     //
     // The immediate words would have already been compiled and registered with the compiler's
     // runtime.
-    run_time::WordHandler Jit::jit_compile(run_time::CompilerRuntime& runtime,
-                                           const ScriptPtr& script)
+    void Jit::jit_compile(run_time::CompilerRuntime& runtime, const ScriptPtr& script)
     {
+        // JIT compile and register all of the words in the sub-scripts first.
+        for (const auto& sub_script : script->get_sub_scripts())
+        {
+            jit_compile(runtime, sub_script);
+        }
+
         // JIT compile and register all of the words in the script with the run-time.
         for (const auto& word_construction : script->get_words())
         {
@@ -125,12 +165,7 @@ namespace sorth::compilation::byte_code
         // If there is no top level code, just return a handler that does nothing.
         if (top_level.empty())
         {
-            auto null_handler = [](run_time::CompilerRuntime&) -> void
-                {
-                    // Do nothing.
-                };
-
-            return null_handler;
+            return;
         }
 
         // Compile the script's top-level code into a handler.  Start off by filtering the name of
@@ -158,7 +193,7 @@ namespace sorth::compilation::byte_code
                                             std::move(constants),
                                             CodeGenType::word);
 
-        return handler;
+        handler(runtime);
     }
 
 

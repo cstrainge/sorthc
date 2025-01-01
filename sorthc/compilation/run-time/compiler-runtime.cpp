@@ -14,6 +14,8 @@ namespace sorth::compilation::run_time
       location(LOCATION_HERE),
       compile_contexts()
     {
+        is_building_runtime = true;
+
         // Append the system path to the search paths.
         append_search_path(system_path);
 
@@ -26,18 +28,13 @@ namespace sorth::compilation::run_time
         //
         // The core words are shared by the compiler's internal runtime and the run-time that the
         // compiled code ultimately runs in.
-        auto runtime_lib = compile_script("std/core-words.f");
+        auto runtime_lib = compile_script("std/compiler-std.f");
+
+        is_building_runtime = false;
 
         // JIT compile the core standard library's words and top level code, the words in the script
         // will automaticaly be added to the run-time's dictionary.
-        for (const auto& sub_script : runtime_lib->get_sub_scripts())
-        {
-            auto top_level = byte_code::get_jit_engine().jit_compile(*this, sub_script);
-            top_level(*this);
-        }
-
-        auto top_level = byte_code::get_jit_engine().jit_compile(*this, runtime_lib);
-        top_level(*this);
+        //byte_code::get_jit_engine().jit_compile(*this, runtime_lib);
 
         // Now that we've JIT compiled the essential words, we can load the rest of the standard
         // library for later reference by the user script(s) we're going to compile.
@@ -45,15 +42,21 @@ namespace sorth::compilation::run_time
     }
 
 
-    const source::Location& CompilerRuntime::get_location() const noexcept
+    bool CompilerRuntime::get_is_building_runtime() const noexcept
     {
-        return location;
+        return is_building_runtime;
     }
 
 
     const byte_code::ScriptPtr& CompilerRuntime::get_standard_library() const noexcept
     {
         return standard_library;
+    }
+
+
+    const source::Location& CompilerRuntime::get_location() const noexcept
+    {
+        return location;
     }
 
 
@@ -209,9 +212,10 @@ namespace sorth::compilation::run_time
                                    WordExecutionContext execution_context,
                                    WordVisibility visibility,
                                    WordType type,
-                                   WordContextManagement context_management)
+                                   WordContextManagement context_management,
+                                   std::optional<byte_code::ByteCode>& code)
     {
-        add_word({ .location = location, .name = name, .handler = handler },
+        add_word({ .location = location, .name = name, .code = code, .handler = handler },
                  execution_context,
                  visibility,
                  type,
@@ -227,7 +231,8 @@ namespace sorth::compilation::run_time
                                    WordExecutionContext execution_context,
                                    WordVisibility visibility,
                                    WordType type,
-                                   WordContextManagement context_management)
+                                   WordContextManagement context_management,
+                                   std::optional<byte_code::ByteCode>& code)
     {
         add_word(name,
                  source::Location(path.string(), line, column),
@@ -235,7 +240,33 @@ namespace sorth::compilation::run_time
                  execution_context,
                  visibility,
                  type,
-                 context_management);
+                 context_management,
+                 code);
+    }
+
+
+    void CompilerRuntime::add_word(const std::string& name,
+                                   const std::filesystem::path& path,
+                                   size_t line,
+                                   size_t column,
+                                   WordHandler handler,
+                                   WordExecutionContext execution_context,
+                                   WordVisibility visibility,
+                                   WordType type,
+                                   WordContextManagement context_management)
+    {
+        std::optional<byte_code::ByteCode> code;
+
+        add_word(name,
+                 path,
+                 line,
+                 column,
+                 handler,
+                 execution_context,
+                 visibility,
+                 type,
+                 context_management,
+                 code);
     }
 
 
@@ -398,9 +429,18 @@ namespace sorth::compilation::run_time
     }
 
 
-    void CompilerRuntime::execute(const WordHandlerInfo& info)
+    void CompilerRuntime::execute(WordHandlerInfo& info)
     {
         CallStackManager manager(*this, info);
+
+        if (   (info.code.has_value())
+            && (!info.handler))
+        {
+            auto& jit = byte_code::get_jit_engine();
+
+            info.handler = jit.jit_compile(*this, info.name, info.code.value());
+            info.code.reset();
+        }
 
         info.handler(*this);
     }

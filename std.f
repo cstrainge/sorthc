@@ -46,3 +46,15 @@
 
 ( Include some useful words for accessing the user's environment. )
 [include] std/user.f
+
+
+
+( Hack for compiling scripts. )
+
+: #!/usr/bin/env
+    ( Do nothing. )
+;
+
+: sorth
+    ( Do nothing. )
+;

@@ -30,7 +30,7 @@ extern "C"
 
                 if (Value::either_is_string(a, b))
                 {
-                    sop(a.get_string(), b.get_string());
+                    sop(a.get_string_with_conversion(), b.get_string_with_conversion());
                 }
                 else if (Value::either_is_float(a, b))
                 {
