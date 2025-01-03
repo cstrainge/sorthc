@@ -729,13 +729,13 @@ namespace sorth::compilation::run_time::built_in_words
         {
             source::Location location = runtime.get_location();
 
-            bool found_initializers = runtime.pop_as_bool();
+            bool found_initializer = runtime.pop_as_bool();
             bool is_hidden = runtime.pop_as_bool();
             ArrayPtr fields = runtime.pop_as_array();
             std::string name = runtime.pop_as_string();
             byte_code::ByteCode init_code;
 
-            if (found_initializers)
+            if (found_initializer)
             {
                 init_code = runtime.pop_as_byte_code();
             }
@@ -1046,7 +1046,7 @@ namespace sorth::compilation::run_time::built_in_words
         ADD_NATIVE_WORD(runtime, "'", word_logic_not);
 
         // Define new structures.
-        ADD_NATIVE_IMMEDIATE_WORD(runtime, "#", word_data_definition);
+        ADD_NATIVE_WORD(runtime, "#.register", word_data_definition);
 
         // Array words.
         ADD_NATIVE_WORD(runtime, "[].new", word_array_new);

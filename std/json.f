@@ -104,11 +104,16 @@
         variable! value
         variable! name
 
+        variable! new_json
+
         "\"" name @ value.to-string + "\"" + ": " + value @ json.to_json_value + ", " +
         new_json @ swap + new_json !
+
+        new_json @
     ;
 
-    ` json.struct_iterator structure @ #.iterate
+    new_json @ ` json.struct_iterator structure @ #.iterate
+    new_json !
 
     new_json @ string.size@ 2 >
     if
@@ -129,11 +134,16 @@
         variable! value
         variable! key
 
+        variable! new_json
+
         "\"" key @ value.to-string + "\"" + ": " + value @ json.to_json_value + ", " +
         new_json @ swap + new_json !
+
+        new_json @
     ;
 
-    ` json.hash_iterator hash @ {}.iterate
+    new_json @ ` json.hash_iterator hash @ {}.iterate
+    new_json !
 
     new_json @ string.size@ 2 >
     if

@@ -18,7 +18,7 @@ namespace sorth::run_time::data_structures
             for (size_t i = 0; i < data->fields.size(); ++i)
             {
                 stream << std::string(Value::value_format_indent, ' ')
-                       << data->definition->fieldNames[i] << " -> ";
+                       << data->definition->field_names[i] << " -> ";
 
                 if (data->fields[i].is_string())
                 {
@@ -72,19 +72,55 @@ namespace sorth::run_time::data_structures
     }
 
 
-    StructurePtr make_data_object(const StrucureDefinitionPtr& definition_ptr)
+    uint8_t make_new_struct(const StrucureDefinitionPtr& definition_ptr, Value& output)
     {
-        StructurePtr result = std::make_shared<Structure>();
+        // Create an instance of the structure
+        StructurePtr new_struct = std::make_shared<Structure>();
 
-        result->definition = definition_ptr;
-        result->fields.reserve(definition_ptr->fieldNames.size());
+        new_struct->definition = definition_ptr;
+        new_struct->fields.resize(definition_ptr->field_names.size());
 
-        for (const auto& default_value : definition_ptr->defaults)
+
+        // Create an array of default values for the structure.  Then call the user's initialization
+        // word to get the actual values.
+        Value default_array = std::make_shared<Array>(definition_ptr->field_names.size());
+
+        stack_push(&default_array);
+        auto result = definition_ptr->init();
+
+        // Make sure that the call to the word was successful.
+        if (result)
         {
-            result->fields.push_back(default_value.deep_copy());
+            set_last_error(("Structure " + definition_ptr->name +
+                            " initialization failed.").c_str());
+            return 1;
         }
 
-        return result;
+        // Now pop the default values off the stack and assign them to the new structure.
+        Value defaults;
+        auto pop_result = stack_pop(&defaults);
+
+        if (!defaults.is_array() || pop_result)
+        {
+            set_last_error(("Structure " + definition_ptr->name +
+                            " initialization failed.").c_str());
+
+            return 1;
+        }
+
+        ArrayPtr new_defaults = defaults.get_array();
+
+        for (size_t i = 0; i < definition_ptr->field_names.size(); ++i)
+        {
+            new_struct->fields[i] = (*new_defaults)[i];
+        }
+
+
+        // The structure has now been initialized, so we can assign it to the output value and
+        // return success.
+        output = Value(new_struct);
+
+        return 0;
     }
 
 

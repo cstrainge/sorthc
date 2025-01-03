@@ -114,8 +114,16 @@ namespace sorth::compilation
         // standard library, or the program being compiled.
         struct WordCollection
         {
+            byte_code::StructureTypeList structures;
+
             WordInfoList words;
             WordMap word_map;
+
+            // Add a structure to our collection.
+            void add_structure(const byte_code::StructureType& structure)
+            {
+                structures.push_back(structure);
+            }
 
             // Add a native word to our collection.
             void add_word(const std::string& name, const std::string& handler_name)
@@ -128,8 +136,7 @@ namespace sorth::compilation
                 // Code is not assigned because it's a native word.
                 info.function = nullptr;
 
-                words.push_back(info);
-                word_map[name] = words.size() - 1;
+                add_word(std::move(info));
             }
 
             // Add a Forth word to our collection.
@@ -152,7 +159,17 @@ namespace sorth::compilation
                 try_resolve_calls(*this, info.code.value());
 
                 // Add to the collections.
-                words.push_back(info);
+                add_word(std::move(info));
+            }
+
+            // Add a completed word info to the collection.
+            void add_word(WordInfo&& word_info)
+            {
+                auto name = word_info.name;
+
+std::cerr << "add_word: " << name << std::endl;
+
+                words.emplace_back(word_info);
                 word_map[name] = words.size() - 1;
             }
         };
@@ -231,6 +248,9 @@ namespace sorth::compilation
             llvm::Function* stack_pop_int;
             llvm::Function* stack_pop_bool;
 
+            // User structure functions.
+            llvm::Function* register_structure_type;
+
             // External error functions.
             llvm::Function* set_last_error;
             llvm::Function* get_last_error;
@@ -266,7 +286,8 @@ namespace sorth::compilation
 
             auto value_struct_ptr_array_type = llvm::ArrayType::get(value_struct_ptr_type, 0);
 
-
+            auto init_function_type = llvm::FunctionType::get(void_type, false);
+            auto init_function_ptr_type = llvm::PointerType::getUnqual(init_function_type);
 
             // Register the external variable functions.
             auto initialize_variable_signature
@@ -385,6 +406,20 @@ namespace sorth::compilation
                                                          "stack_pop_bool",
                                                          module.get());
 
+            // Register the user structure functions.
+            auto register_structure_type_signature = llvm::FunctionType::get(void_type,
+                                                                {
+                                                                    char_ptr_type,
+                                                                    char_ptr_type,
+                                                                    uint64_type,
+                                                                    init_function_ptr_type
+                                                                },
+                                                                false);
+            auto register_structure_type = llvm::Function::Create(register_structure_type_signature,
+                                                                  llvm::Function::ExternalLinkage,
+                                                                  "register_structure_type",
+                                                                  module.get());
+
             // Register the external error functions.
             auto set_last_error_signature = llvm::FunctionType::get(void_type,
                                                                     { char_ptr_type },
@@ -435,6 +470,8 @@ namespace sorth::compilation
                     .stack_pop_int = stack_pop_int,
                     .stack_pop_bool = stack_pop_bool,
 
+                    .register_structure_type = register_structure_type,
+
                     .set_last_error = set_last_error,
                     .get_last_error = get_last_error,
                     .push_last_error = push_last_error,
@@ -468,6 +505,145 @@ namespace sorth::compilation
             for (const auto& word : script->get_words())
             {
                 collection.add_word(word);
+            }
+        }
+
+
+        // Create the structure init and access words for the script and it's subscripts.
+        void create_structure_words(const byte_code::ScriptPtr& script,
+                                    WordCollection& collection)
+        {
+            // Create the structure words for the sub-scripts of this script first...
+            for (const auto& sub_script : script->get_sub_scripts())
+            {
+                create_structure_words(sub_script, collection);
+            }
+
+            // Now create the structure words for this script.
+            const auto& structures = script->get_structure_types();
+
+            // Create the structure initialization word, and supporting accessor words.
+            for (const auto& structure : structures)
+            {
+                // Register the structure with the word collection.
+                collection.add_structure(structure);
+
+                // Now create the structure initialization word, and supporting accessor words.
+                const auto& struct_name = structure.get_name();
+                const auto& struct_location = structure.get_location();
+
+                WordInfo init_word_info;
+
+                // Create the auto-initialization word that will automatically get called every time
+                // an instance of the structure is created.  We mark these words as referenced
+                // because they are always registered with the run-time by the script init code.
+                init_word_info.name = structure.get_name() + ".raw-init";
+                init_word_info.handler_name = filter_word_name(init_word_info.name);
+                init_word_info.was_referenced = true;
+
+                init_word_info.code = structure.get_initializer();
+                collection.add_word(std::move(init_word_info));
+
+                // Add the user callable struct.new word now.  #.create-raw will call the registered
+                // structure.raw-init word to initialize the structure.
+                compilation::byte_code::Construction new_word_info(struct_location,
+                                                                   struct_name + ".new");
+
+                new_word_info.get_code().push_back(compilation::byte_code::Instruction(
+                                       compilation::byte_code::Instruction::Id::push_constant_value,
+                                       struct_name));
+                new_word_info.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "#.create-named"));
+
+                collection.add_word(new_word_info);
+
+                // Now create the convience structure accessor words...
+                for (size_t i = 0; i < structure.get_field_names().size(); ++i)
+                {
+                    const auto& field_name = structure.get_field_names()[i];
+
+                    // struct.field
+                    compilation::byte_code::Construction field_index_word(
+                                                                    struct_location,
+                                                                    struct_name + "." + field_name);
+
+                    field_index_word.get_code().push_back(compilation::byte_code::Instruction(
+                                       compilation::byte_code::Instruction::Id::push_constant_value,
+                                       static_cast<int64_t>(i)));
+
+                    // strcut.field@
+                    compilation::byte_code::Construction field_read_word(
+                                                                    struct_location,
+                                                                    struct_name + "." + field_name
+                                                                                + "@");
+
+                    field_read_word.get_code().push_back(compilation::byte_code::Instruction(
+                                       compilation::byte_code::Instruction::Id::push_constant_value,
+                                       static_cast<int64_t>(i)));
+                    field_read_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "swap"));
+                    field_read_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "#@"));
+
+                    // struct.field@@
+                    compilation::byte_code::Construction field_read_var_word(
+                                                                    struct_location,
+                                                                    struct_name + "." + field_name
+                                                                                + "@@");
+                    field_read_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                       compilation::byte_code::Instruction::Id::push_constant_value,
+                                       static_cast<int64_t>(i)));
+                    field_read_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "swap"));
+                    field_read_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                           compilation::byte_code::Instruction::Id::read_variable));
+                    field_read_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "#@"));
+
+                    // struct.field!
+                    compilation::byte_code::Construction field_write_word(
+                                                                    struct_location,
+                                                                    struct_name + "." + field_name
+                                                                                + "!");
+
+                    field_write_word.get_code().push_back(compilation::byte_code::Instruction(
+                                       compilation::byte_code::Instruction::Id::push_constant_value,
+                                       static_cast<int64_t>(i)));
+                    field_write_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "swap"));
+                    field_write_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "#!"));
+
+                    // struct.field!!
+                    compilation::byte_code::Construction field_write_var_word(
+                                                                    struct_location,
+                                                                    struct_name + "." + field_name
+                                                                                + "!!");
+                    field_write_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                       compilation::byte_code::Instruction::Id::push_constant_value,
+                                       static_cast<int64_t>(i)));
+                    field_write_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "swap"));
+                    field_write_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                           compilation::byte_code::Instruction::Id::read_variable));
+                    field_write_var_word.get_code().push_back(compilation::byte_code::Instruction(
+                                                   compilation::byte_code::Instruction::Id::execute,
+                                                   "#!"));
+
+                    collection.add_word(field_index_word);
+                    collection.add_word(field_read_word);
+                    collection.add_word(field_read_var_word);
+                    collection.add_word(field_write_word);
+                    collection.add_word(field_write_var_word);
+                }
             }
         }
 
@@ -626,6 +802,7 @@ namespace sorth::compilation
             auto int64_type = llvm::Type::getInt64Ty(context);
             auto double_type = llvm::Type::getDoubleTy(context);
             auto char_type = llvm::Type::getInt1Ty(context);
+            auto char_ptr_type = llvm::PointerType::getUnqual(char_type);
 
             // Keep track of the variables and constants that are used in the byte-code block.
             ValueMap variable_map;
@@ -645,6 +822,73 @@ namespace sorth::compilation
             // Create the entry block of the function.
             auto entry_block = llvm::BasicBlock::Create(context, "entry_block", function);
             builder.SetInsertPoint(entry_block);
+
+            // If this is the top-level code we need to register all of the script structure types
+            // with the run-time.
+            if (is_top_level)
+            {
+std::cerr << "---<00>-------" << std::endl;
+                for (const auto& structure : collection.structures)
+                {
+std::cerr << "---<01>-------" << std::endl;
+                    auto struct_name = define_string_constant(structure.get_name(),
+                                                              builder,
+                                                              module,
+                                                              context);
+std::cerr << "---<02>-------" << std::endl;
+                    auto field_count = structure.get_field_names().size();
+std::cerr << "---<03>-------" << std::endl;
+                    auto field_count_const = llvm::ConstantInt::get(int64_type, field_count);
+
+std::cerr << "---<04>-------" << std::endl;
+                    auto char_ptr_array_type = llvm::ArrayType::get(char_ptr_type, field_count);
+
+std::cerr << "---<05>-------" << std::endl;
+                    auto name_array_variable = builder.CreateAlloca(char_ptr_array_type);
+
+std::cerr << "---<06>-------" << std::endl;
+                    for (size_t i = 0; i < field_count; ++i)
+                    {
+std::cerr << "---<07>-------" << std::endl;
+                        auto field_name = define_string_constant(structure.get_field_names()[i],
+                                                                builder,
+                                                                module,
+                                                                context);
+std::cerr << "---<08>-------" << std::endl;
+                        auto array_ptr = builder.CreateStructGEP(char_ptr_array_type,
+                                                                 name_array_variable,
+                                                                 i);
+std::cerr << "---<09>-------" << std::endl;
+                        builder.CreateStore(field_name, array_ptr);
+                    }
+
+std::cerr << "---<10>-------" << std::endl;
+                    auto iterator = collection.word_map.find(structure.get_name() +
+                                                             ".raw-init");
+
+std::cerr << "---<11>-------" << std::endl;
+                    if (iterator == collection.word_map.end())
+                    {
+std::cerr << "---<12>-------" << std::endl;
+                        throw std::runtime_error("Internal error, structure initializer not "
+                                                 "found.");
+                    }
+
+std::cerr << "---<13>-------" << std::endl;
+                    auto init_handler = collection.words[iterator->second].function;
+
+std::cerr << "---<14>-------" << std::endl;
+                    builder.CreateCall(runtime_api.register_structure_type,
+                                       {
+                                           struct_name,
+                                           name_array_variable,
+                                           field_count_const,
+                                           init_handler
+                                       });
+std::cerr << "---<15>-------" << std::endl;
+                }
+std::cerr << "---<16>-------" << std::endl;
+            }
 
             // Keep track of any loop and catch block markers.
             std::vector<std::pair<size_t, size_t>> loop_markers;
@@ -1546,32 +1790,48 @@ namespace sorth::compilation
         gather_script_words(standard_library, words);
         gather_script_words(script, words);
 
+        // Create the structure words for the runtime and the standard library.  These words will
+        // be used to init and access the script's data structures.
+std::cerr << "---generate_llvm_ir<00>-------create_structure_words" << std::endl;
+        create_structure_words(standard_library, words);
+std::cerr << "---generate_llvm_ir<01>-------create_structure_words" << std::endl;
+        create_structure_words(script, words);
+std::cerr << "---generate_llvm_ir<02>-------create_structure_words" << std::endl;
+
         // Now that all words have been gathered, we can try to resolve all calls one last time.
         // After this the only unresolved calls should be variable and constant accesses which will
         // get resolved later.  Any non-variable or constant calls that are unresolved at this point
         // are a fatal error, which we'll check for during the code generation phase.
+std::cerr << "---generate_llvm_ir<03>-------" << std::endl;
         try_resolve_words(words);
 
         // Build up the full top-level code for the script, including any sub-scripts and the
         // standard library.
+std::cerr << "---generate_llvm_ir<04>-------" << std::endl;
         byte_code::ByteCode top_level_code;
         GlobalMap const_map;
 
+std::cerr << "---generate_llvm_ir<05>-------" << std::endl;
         collect_top_level_code(standard_library, top_level_code);
+std::cerr << "---generate_llvm_ir<06>-------" << std::endl;
         collect_top_level_code(script, top_level_code);
 
         // Try to resolve all the calls in the top-level code.
+std::cerr << "---generate_llvm_ir<07>-------" << std::endl;
         try_resolve_calls(words, top_level_code);
 
         // Now that we have all the top-levels collected, we can go through that code and mark
         // words as used or unused.  Then make sure that all of the used words have been properly
         // declared.
+std::cerr << "---generate_llvm_ir<08>-------" << std::endl;
         mark_used_words(words, top_level_code);
+std::cerr << "---generate_llvm_ir<09>-------" << std::endl;
         create_word_declarations(words, module, context);
 
         // Create the script top-level function.  This function will be the entry point for the
         // resulting program.  It'll be made of of all the top level blocks in each of the scripts
         // that we gathered previously.
+std::cerr << "---generate_llvm_ir<10>-------" << std::endl;
         compile_top_level_code(words,
                                top_level_code,
                                module,
@@ -1581,26 +1841,31 @@ namespace sorth::compilation
                                const_map);
 
         // Compile the function bodies for all used Forth words.
+std::cerr << "---generate_llvm_ir<11>-------" << std::endl;
         compile_used_words(words, module, context, builder, runtime_api, const_map);
 
 
         // Create the word_table for the runtime.
+std::cerr << "---generate_llvm_ir<12>-------" << std::endl;
         create_word_table(words, module, context);
 
 
         // Now that all code has been generated, verify that the module is well-formed.
+std::cerr << "---generate_llvm_ir<13>-------" << std::endl;
         if (verifyModule(*module, &llvm::errs()))
         {
             throw_error("Generated LLVM IR module is invalid.");
         }
 
         // Apply LLVM optimization passes to the module.
+std::cerr << "---generate_llvm_ir<14>-------" << std::endl;
         optimize_module(module);
 
         // We've generated our code and optimized it, we can now write the LLVM IR to an object
         // file.
 
         // Get the target triple for the host machine.
+std::cerr << "---generate_llvm_ir<15>-------" << std::endl;
         auto target_triple = llvm::sys::getDefaultTargetTriple();
 
         // Find the llvm target for the host machine.
@@ -1626,7 +1891,7 @@ namespace sorth::compilation
         module->setDataLayout(target_machine->createDataLayout());
 
         // Uncomment the following line to print the module to stdout for debugging.
-        // module->print(llvm::outs(), nullptr);
+        module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;

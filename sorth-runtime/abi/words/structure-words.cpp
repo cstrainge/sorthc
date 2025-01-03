@@ -5,6 +5,7 @@
 
 
 using namespace sorth::run_time::data_structures;
+using namespace sorth::run_time::abi;
 
 
 
@@ -42,6 +43,39 @@ extern "C"
 
         using WordType = int8_t (*)();
         extern WordType word_table[];
+
+
+        uint8_t word_create_named_struct()
+        {
+            Value name_value;
+
+            auto pop_result = stack_pop(&name_value);
+
+            if (pop_result)
+            {
+                return 1;
+            }
+
+            if (!name_value.is_string())
+            {
+                set_last_error("Expected a string value for structure name.");
+                return 1;
+            }
+
+            auto name = name_value.get_string();
+            Value new_structure;
+
+            auto create_result = create_structure(name, &new_structure);
+
+            if (create_result)
+            {
+                return 1;
+            }
+
+            stack_push(&new_structure);
+
+            return 0;
+        }
 
 
         uint8_t word_read_field()
@@ -108,9 +142,9 @@ extern "C"
 
             auto& data_type = object->definition;
 
-            for (size_t i = 0; i < data_type->fieldNames.size(); ++i)
+            for (size_t i = 0; i < data_type->field_names.size(); ++i)
             {
-                stack_push_string(data_type->fieldNames[i].c_str());
+                stack_push_string(data_type->field_names[i].c_str());
                 stack_push(&object->fields[i]);
 
                 handler();
@@ -136,7 +170,7 @@ extern "C"
 
             bool found = false;
 
-            for (const auto& name : object->definition->fieldNames)
+            for (const auto& name : object->definition->field_names)
             {
                 if (name == field_name)
                 {
@@ -176,6 +210,7 @@ namespace sorth::run_time::abi::words
 
     void register_structure_words(const RuntimeWordRegistrar& registrar)
     {
+        registrar("#.create-named", "word_create_named_struct");
         registrar("#@", "word_read_field");
         registrar("#!", "word_write_field");
         registrar("#.iterate", "word_structure_iterate");
