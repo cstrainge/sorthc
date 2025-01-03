@@ -1,6 +1,9 @@
 
 # A compiler for the Strange Forth Language
 
+This is an experimental ahead of time compiler for the [Strange Forth Language](https://github.com/cstrainge/sorth).  It is still catching up with the features of the interpreted version of the
+language however it can handle most of the language features.
+
 This tool will compile your Strange Forth language to an executable.  Your immediate words run
 within a limited version of the runtime within the compiler itself.  All other words are compiled
 into the final executable.
