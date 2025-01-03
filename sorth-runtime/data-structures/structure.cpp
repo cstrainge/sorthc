@@ -115,7 +115,6 @@ namespace sorth::run_time::data_structures
             new_struct->fields[i] = (*new_defaults)[i];
         }
 
-
         // The structure has now been initialized, so we can assign it to the output value and
         // return success.
         output = Value(new_struct);
