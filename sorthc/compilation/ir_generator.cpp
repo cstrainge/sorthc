@@ -109,6 +109,8 @@ namespace sorth::compilation
         struct WordCollection;
         void try_resolve_calls(WordCollection& collection, byte_code::ByteCode& code);
 
+        void mark_used_words(WordCollection& collection, const byte_code::ByteCode& code);
+
 
         // Collection of words that the compiler knows about.  They can come from the runtime, the
         // standard library, or the program being compiled.
@@ -166,8 +168,6 @@ namespace sorth::compilation
             void add_word(WordInfo&& word_info)
             {
                 auto name = word_info.name;
-
-std::cerr << "add_word: " << name << std::endl;
 
                 words.emplace_back(word_info);
                 word_map[name] = words.size() - 1;
@@ -542,7 +542,13 @@ std::cerr << "add_word: " << name << std::endl;
                 init_word_info.was_referenced = true;
 
                 init_word_info.code = structure.get_initializer();
+
+                // Make sure that any words used by the user init code are also marked as used.
+                mark_used_words(collection, init_word_info.code.value());
+
+                // Add the word to the collection.
                 collection.add_word(std::move(init_word_info));
+
 
                 // Add the user callable struct.new word now.  #.create-raw will call the registered
                 // structure.raw-init word to initialize the structure.
@@ -827,57 +833,42 @@ std::cerr << "add_word: " << name << std::endl;
             // with the run-time.
             if (is_top_level)
             {
-std::cerr << "---<00>-------" << std::endl;
                 for (const auto& structure : collection.structures)
                 {
-std::cerr << "---<01>-------" << std::endl;
                     auto struct_name = define_string_constant(structure.get_name(),
                                                               builder,
                                                               module,
                                                               context);
-std::cerr << "---<02>-------" << std::endl;
                     auto field_count = structure.get_field_names().size();
-std::cerr << "---<03>-------" << std::endl;
                     auto field_count_const = llvm::ConstantInt::get(int64_type, field_count);
 
-std::cerr << "---<04>-------" << std::endl;
                     auto char_ptr_array_type = llvm::ArrayType::get(char_ptr_type, field_count);
 
-std::cerr << "---<05>-------" << std::endl;
                     auto name_array_variable = builder.CreateAlloca(char_ptr_array_type);
 
-std::cerr << "---<06>-------" << std::endl;
                     for (size_t i = 0; i < field_count; ++i)
                     {
-std::cerr << "---<07>-------" << std::endl;
                         auto field_name = define_string_constant(structure.get_field_names()[i],
                                                                 builder,
                                                                 module,
                                                                 context);
-std::cerr << "---<08>-------" << std::endl;
                         auto array_ptr = builder.CreateStructGEP(char_ptr_array_type,
                                                                  name_array_variable,
                                                                  i);
-std::cerr << "---<09>-------" << std::endl;
                         builder.CreateStore(field_name, array_ptr);
                     }
 
-std::cerr << "---<10>-------" << std::endl;
                     auto iterator = collection.word_map.find(structure.get_name() +
                                                              ".raw-init");
 
-std::cerr << "---<11>-------" << std::endl;
                     if (iterator == collection.word_map.end())
                     {
-std::cerr << "---<12>-------" << std::endl;
                         throw std::runtime_error("Internal error, structure initializer not "
                                                  "found.");
                     }
 
-std::cerr << "---<13>-------" << std::endl;
                     auto init_handler = collection.words[iterator->second].function;
 
-std::cerr << "---<14>-------" << std::endl;
                     builder.CreateCall(runtime_api.register_structure_type,
                                        {
                                            struct_name,
@@ -885,9 +876,7 @@ std::cerr << "---<14>-------" << std::endl;
                                            field_count_const,
                                            init_handler
                                        });
-std::cerr << "---<15>-------" << std::endl;
                 }
-std::cerr << "---<16>-------" << std::endl;
             }
 
             // Keep track of any loop and catch block markers.
@@ -1792,46 +1781,35 @@ std::cerr << "---<16>-------" << std::endl;
 
         // Create the structure words for the runtime and the standard library.  These words will
         // be used to init and access the script's data structures.
-std::cerr << "---generate_llvm_ir<00>-------create_structure_words" << std::endl;
         create_structure_words(standard_library, words);
-std::cerr << "---generate_llvm_ir<01>-------create_structure_words" << std::endl;
         create_structure_words(script, words);
-std::cerr << "---generate_llvm_ir<02>-------create_structure_words" << std::endl;
 
         // Now that all words have been gathered, we can try to resolve all calls one last time.
         // After this the only unresolved calls should be variable and constant accesses which will
         // get resolved later.  Any non-variable or constant calls that are unresolved at this point
         // are a fatal error, which we'll check for during the code generation phase.
-std::cerr << "---generate_llvm_ir<03>-------" << std::endl;
         try_resolve_words(words);
 
         // Build up the full top-level code for the script, including any sub-scripts and the
         // standard library.
-std::cerr << "---generate_llvm_ir<04>-------" << std::endl;
         byte_code::ByteCode top_level_code;
         GlobalMap const_map;
 
-std::cerr << "---generate_llvm_ir<05>-------" << std::endl;
         collect_top_level_code(standard_library, top_level_code);
-std::cerr << "---generate_llvm_ir<06>-------" << std::endl;
         collect_top_level_code(script, top_level_code);
 
         // Try to resolve all the calls in the top-level code.
-std::cerr << "---generate_llvm_ir<07>-------" << std::endl;
         try_resolve_calls(words, top_level_code);
 
         // Now that we have all the top-levels collected, we can go through that code and mark
         // words as used or unused.  Then make sure that all of the used words have been properly
         // declared.
-std::cerr << "---generate_llvm_ir<08>-------" << std::endl;
         mark_used_words(words, top_level_code);
-std::cerr << "---generate_llvm_ir<09>-------" << std::endl;
         create_word_declarations(words, module, context);
 
         // Create the script top-level function.  This function will be the entry point for the
         // resulting program.  It'll be made of of all the top level blocks in each of the scripts
         // that we gathered previously.
-std::cerr << "---generate_llvm_ir<10>-------" << std::endl;
         compile_top_level_code(words,
                                top_level_code,
                                module,
@@ -1841,31 +1819,26 @@ std::cerr << "---generate_llvm_ir<10>-------" << std::endl;
                                const_map);
 
         // Compile the function bodies for all used Forth words.
-std::cerr << "---generate_llvm_ir<11>-------" << std::endl;
         compile_used_words(words, module, context, builder, runtime_api, const_map);
 
 
         // Create the word_table for the runtime.
-std::cerr << "---generate_llvm_ir<12>-------" << std::endl;
         create_word_table(words, module, context);
 
 
         // Now that all code has been generated, verify that the module is well-formed.
-std::cerr << "---generate_llvm_ir<13>-------" << std::endl;
         if (verifyModule(*module, &llvm::errs()))
         {
             throw_error("Generated LLVM IR module is invalid.");
         }
 
         // Apply LLVM optimization passes to the module.
-std::cerr << "---generate_llvm_ir<14>-------" << std::endl;
         optimize_module(module);
 
         // We've generated our code and optimized it, we can now write the LLVM IR to an object
         // file.
 
         // Get the target triple for the host machine.
-std::cerr << "---generate_llvm_ir<15>-------" << std::endl;
         auto target_triple = llvm::sys::getDefaultTargetTriple();
 
         // Find the llvm target for the host machine.

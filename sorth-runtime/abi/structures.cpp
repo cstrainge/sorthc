@@ -26,27 +26,19 @@ extern "C"
                                  size_t field_count,
                                  uint8_t (*init_function)(void))
     {
-std::cout << "register_structure_type" << std::endl;
         auto new_type = std::make_shared<StructureDefinition>();
 
-std::cout << "----<00>--------"<< std::endl;
         new_type->name = name;
-std::cout << "----<01>--------"<< std::endl;
         new_type->is_hidden = false;
-std::cout << "----<02>--------"<< std::endl;
         new_type->init = init_function;
 
-std::cout << "----<03>--------"<< std::endl;
         new_type->field_names.reserve(field_count);
 
-std::cout << "----<04>-------- " << (void*)fields << std::endl;
         for (size_t i = 0; i < field_count; ++i)
         {
-std::cout << "----<05>-------- " << (void*)fields[i] /*<< fields[i]*/ << std::endl;
             new_type->field_names.push_back(fields[i]);
         }
 
-std::cout << "----<06>--------"<< std::endl;
         structure_definitions[name] = new_type;
     }
 
