@@ -49,11 +49,20 @@
 
 
 
+( Include words for JSON parsing and generation. )
+[include] std/json.f
+
+
+
 ( Hack for compiling scripts. )
+
+
 
 : #!/usr/bin/env
     ( Do nothing. )
 ;
+
+
 
 : sorth
     ( Do nothing. )

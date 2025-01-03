@@ -10,7 +10,7 @@
     "" variable! new
 
     original string.size@@ variable! size
-    variable index
+    0 variable! index
     variable next_char
 
     begin
@@ -99,7 +99,6 @@
              signature: "structure -- json_string"
     variable! structure
     "{ " variable! new_json
-
     : json.struct_iterator hidden
         variable! value
         variable! name
