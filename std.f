@@ -54,6 +54,11 @@
 
 
 
+( The foreign function interface. )
+[include] std/ffi.f
+
+
+
 ( Hack for compiling scripts. )
 
 

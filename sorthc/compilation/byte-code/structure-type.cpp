@@ -21,6 +21,22 @@ namespace sorth::compilation::byte_code
     }
 
 
+    StructureType::StructureType(const source::Location& location,
+                                 const std::string& name,
+                                 WordVisibility visibility,
+                                 const std::vector<std::string>& field_names,
+                                 const ByteCode& initializer,
+                                 const FfiInfo& ffi_info)
+    : location(location),
+      name(name),
+      visibility(visibility),
+      field_names(field_names),
+      initializer(initializer),
+      ffi_info(ffi_info)
+    {
+    }
+
+
     const source::Location& StructureType::get_location() const noexcept
     {
         return location;

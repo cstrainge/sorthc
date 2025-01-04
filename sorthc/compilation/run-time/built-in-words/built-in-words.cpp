@@ -733,6 +733,7 @@ namespace sorth::compilation::run_time::built_in_words
             bool is_hidden = runtime.pop_as_bool();
             ArrayPtr fields = runtime.pop_as_array();
             std::string name = runtime.pop_as_string();
+
             byte_code::ByteCode init_code;
 
             if (found_initializer)
@@ -755,6 +756,77 @@ namespace sorth::compilation::run_time::built_in_words
                                                     : compilation::WordVisibility::visible,
                                           field_names,
                                           init_code);
+
+            runtime.get_compile_context().add_script_structure(type);
+        }
+
+
+        void word_ffi_register_function(CompilerRuntime& runtime)
+        {
+            auto ret_type = runtime.pop_as_string();
+            auto arguments_value = runtime.pop_as_array();
+            auto alias = runtime.pop_as_string();
+            auto name = runtime.pop_as_string();
+
+            byte_code::FfiFunction function;
+
+            function.name = name;
+            function.alias = alias;
+            function.return_type = ret_type;
+
+            function.argument_types.reserve(arguments_value->size());
+
+            for (size_t i = 0; i < arguments_value->size(); ++i)
+            {
+                function.argument_types.push_back((*arguments_value)[i].get_string(runtime));
+            }
+
+            runtime.get_compile_context().add_ffi_function(function);
+        }
+
+
+        void word_ffi_register_structure(CompilerRuntime& runtime)
+        {
+            source::Location location = runtime.get_location();
+
+            auto found_initializer = runtime.pop_as_bool();
+            auto field_types = runtime.pop_as_array();
+            auto fields = runtime.pop_as_array();
+            auto alignment = runtime.pop_as_string();
+            auto name = runtime.pop_as_string();
+
+            byte_code::ByteCode init_code;
+
+            if (found_initializer)
+            {
+                init_code = runtime.pop_as_byte_code();
+            }
+
+            std::vector<std::string> field_names;
+
+            field_names.reserve(fields->size());
+
+            for (size_t i = 0; i < fields->size(); ++i)
+            {
+                field_names.push_back((*fields)[i].get_string(runtime));
+            }
+
+            byte_code::FfiInfo ffi_info;
+
+            ffi_info.alignment = std::stoul(alignment);
+            ffi_info.field_types.reserve(field_types->size());
+
+            for (size_t i = 0; i < field_types->size(); ++i)
+            {
+                ffi_info.field_types.push_back((*field_types)[i].get_string(runtime));
+            }
+
+            byte_code::StructureType type(location,
+                                          name,
+                                          WordVisibility::visible,
+                                          field_names,
+                                          init_code,
+                                          ffi_info);
 
             runtime.get_compile_context().add_script_structure(type);
         }
@@ -1047,6 +1119,10 @@ namespace sorth::compilation::run_time::built_in_words
 
         // Define new structures.
         ADD_NATIVE_WORD(runtime, "#.register", word_data_definition);
+
+        // Define FFI words and types.
+        ADD_NATIVE_WORD(runtime, "ffi.register-function", word_ffi_register_function);
+        ADD_NATIVE_WORD(runtime, "ffi.register-structure", word_ffi_register_structure);
 
         // Array words.
         ADD_NATIVE_WORD(runtime, "[].new", word_array_new);

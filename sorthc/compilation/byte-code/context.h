@@ -18,6 +18,18 @@ namespace sorth::compilation::byte_code
 {
 
 
+    struct FfiFunction
+    {
+        std::string name;
+        std::string alias;
+        std::vector<std::string> argument_types;
+        std::string return_type;
+    };
+
+
+    using FfiFunctionList = std::vector<FfiFunction>;
+
+
     // Where in the bytecode list should new code be inserted?
     enum class CodeInsertionPoint
     {
@@ -51,6 +63,9 @@ namespace sorth::compilation::byte_code
             // The list of structure types that have been defined in the script.
             StructureTypeList structure_types;
 
+            // The list of FFI functions that have been defined in the script.
+            FfiFunctionList ffi_functions;
+
             // Where in the top construction's code the next instructions should be inserted.
             CodeInsertionPoint insertion_point;
 
@@ -82,11 +97,16 @@ namespace sorth::compilation::byte_code
 
             void add_script_structure(const StructureType& structure);
 
+            void add_ffi_function(const FfiFunction& function);
+
             const SubScriptList& get_sub_scripts() const noexcept;
             SubScriptList&& take_sub_scripts() noexcept;
 
             const StructureTypeList& get_structure_types() const noexcept;
             StructureTypeList&& take_structure_types() noexcept;
+
+            const FfiFunctionList& get_ffi_functions() const noexcept;
+            FfiFunctionList&& take_ffi_functions() noexcept;
 
         public:
             // Compile the context into byte-code instructions.

@@ -57,6 +57,12 @@ namespace sorth::compilation::byte_code
     }
 
 
+    void Context::add_ffi_function(const FfiFunction& function)
+    {
+        ffi_functions.push_back(function);
+    }
+
+
     const SubScriptList& Context::get_sub_scripts() const noexcept
     {
         return sub_scripts;
@@ -78,6 +84,18 @@ namespace sorth::compilation::byte_code
     StructureTypeList&& Context::take_structure_types() noexcept
     {
         return std::move(structure_types);
+    }
+
+
+    const FfiFunctionList& Context::get_ffi_functions() const noexcept
+    {
+        return ffi_functions;
+    }
+
+
+    FfiFunctionList&& Context::take_ffi_functions() noexcept
+    {
+        return std::move(ffi_functions);
     }
 
 

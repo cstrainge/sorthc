@@ -11,11 +11,13 @@ namespace sorth::compilation::byte_code
                    std::filesystem::path&& script_path,
                    ConstructionList&& words,
                    StructureTypeList&& structure_types,
+                   FfiFunctionList&& ffi_functions,
                    ByteCode&& top_level) noexcept
     : sub_scripts(std::move(sub_scripts)),
       script_path(std::move(script_path)),
       words(std::move(words)),
       structure_types(std::move(structure_types)),
+      ffi_functions(std::move(ffi_functions)),
       top_level(std::move(top_level)),
       word_map()
     {
@@ -50,7 +52,6 @@ namespace sorth::compilation::byte_code
 
         if (found == word_map.end())
         {
-std::cout << "----get_word<00>--------" << std::endl;
             throw_error("Word " + name + " not found in script.");
         }
 
@@ -61,6 +62,12 @@ std::cout << "----get_word<00>--------" << std::endl;
     const StructureTypeList& Script::get_structure_types() const noexcept
     {
         return structure_types;
+    }
+
+
+    const FfiFunctionList& Script::get_ffi_functions() const noexcept
+    {
+        return ffi_functions;
     }
 
 
