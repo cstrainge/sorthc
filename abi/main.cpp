@@ -44,20 +44,20 @@ int main(int argc, char* argv[])
 
         // Call the generated top level of the user code, and report any errors that were raised by
         // the user code, if any.
-        result = script_top_level();
+        auto was_error = script_top_level();
 
-        if (   (result)
+        if (   (was_error)
             && (is_error_set()))
         {
             std::cerr << "Error: " << get_last_error() << std::endl;
+            result = EXIT_FAILURE;
         }
     }
     catch (const std::exception& error)
     {
         // Something went wrong in the C++ run-time code.  Report the error and return a failure
         // status to the OS.
-        std::cerr << "An unexpected error occurred: " << std::endl
-                  << error.what() << std::endl;
+        std::cerr << "An unexpected error occurred: " << error.what() << std::endl;
 
         result = EXIT_FAILURE;
     }
