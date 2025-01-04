@@ -67,4 +67,10 @@ namespace sorth::compilation::byte_code
     }
 
 
+    const std::optional<FfiInfo>& StructureType::get_ffi_info() const noexcept
+    {
+        return ffi_info;
+    }
+
+
 }

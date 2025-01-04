@@ -18,6 +18,7 @@ namespace sorth::compilation::byte_code
 {
 
 
+    // Information about a foreign function.
     struct FfiFunction
     {
         std::string name;

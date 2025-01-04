@@ -33,4 +33,11 @@ extern "C"
 
     int8_t stack_pop_bool(bool* value);
 
+
+    int8_t stack_pop_double(double* value);
+
+
+    // int8_t stack_pop_string(char** value);
+
+
 }

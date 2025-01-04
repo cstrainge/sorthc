@@ -77,16 +77,101 @@ namespace sorth::compilation
         using GlobalMap = std::unordered_map<std::string, llvm::GlobalVariable*>;
 
 
+        // Information about a variable found in the byte-code.
         struct ValueInfo
         {
-            llvm::AllocaInst* variable;
-            llvm::AllocaInst* variable_index;
-            size_t block_index;
+            llvm::AllocaInst* variable;         // The variable itself.
+            llvm::AllocaInst* variable_index;   // The run-time allocated index for the variable.
+            size_t block_index;                 // The index of the variable within it's block.
         };
 
 
         // Map of names ot LLVM local variables.
         using ValueMap = std::unordered_map<std::string, ValueInfo>;
+
+
+        // The API as exposed by the runtime-library that's intended to be called directly by the
+        // generated code.
+        struct RuntimeApi
+        {
+            // The value structure type.
+            llvm::StructType* value_struct_type;
+            llvm::PointerType* value_struct_ptr_type;
+            llvm::ArrayType* value_struct_ptr_array_type;
+
+            // External variable functions.
+            llvm::Function* initialize_variable;
+            llvm::Function* free_variable;
+            llvm::Function* allocate_variable_block;
+            llvm::Function* release_variable_block;
+            llvm::Function* read_variable;
+            llvm::Function* write_variable;
+            llvm::Function* deep_copy_variable;
+
+            // External stack functions.
+            llvm::Function* stack_push;
+            llvm::Function* stack_push_int;
+            llvm::Function* stack_push_double;
+            llvm::Function* stack_push_bool;
+            llvm::Function* stack_push_string;
+            llvm::Function* stack_pop;
+            llvm::Function* stack_pop_int;
+            llvm::Function* stack_pop_bool;
+            llvm::Function* stack_pop_double;
+
+            // User structure functions.
+            llvm::Function* register_structure_type;
+
+            // External error functions.
+            llvm::Function* set_last_error;
+            llvm::Function* get_last_error;
+            llvm::Function* push_last_error;
+            llvm::Function* clear_last_error;
+        };
+
+
+        // Map of ffi type names to llvm types.
+        struct FfiTypeInfo
+        {
+            // The raw LLVM type representation of the type.
+            llvm::Type* type;
+
+            // Generate code the pop from the stack and assign to the variable.
+            std::function<llvm::CallInst*(llvm::IRBuilder<>&,const RuntimeApi&,llvm::Value*)> pop_value;
+
+            // Generate code to free any external memory the value used, like strings.
+            std::function<void(llvm::IRBuilder<>&,const RuntimeApi&,llvm::Value*)> free_value;
+
+            // Generate code to push the value onto the stack.
+            std::function<void(llvm::IRBuilder<>&,const RuntimeApi&,llvm::Value*)> push_value;
+        };
+
+
+        // Map of ffi type names to their information.
+        using FfiTypeMap = std::unordered_map<std::string, FfiTypeInfo>;
+
+
+        // Information about a foreign function parameter.
+        struct FfiFunctionParameter
+        {
+            std::string type_name;   // The name of the type.
+            FfiTypeInfo type;        // The LLVM type of the parameter.
+        };
+
+
+        // List of foreign function parameters.
+        using FfiFunctionParameterList = std::vector<FfiFunctionParameter>;
+
+
+        // Information about an external foreign function.
+        struct FfiFunctionInfo
+        {
+            std::string name;                      // The name of the function.
+            FfiFunctionParameterList parameters;   // The parameters of the function.
+            FfiTypeInfo return_type;               // The return type of the function.
+
+            llvm::Function* function;              // The declaration of the function.
+        };
 
 
         // Information about a word that the compiler knows about.
@@ -96,7 +181,8 @@ namespace sorth::compilation
             std::string handler_name;   // The name of the function that implements the word.
             bool was_referenced;        // True if the word was referenced by the script.
 
-            std::optional<byte_code::ByteCode> code;  // If unassigned, then it's a native word.
+            std::optional<byte_code::ByteCode> code;   // If unassigned, then it's a native word.
+            std::optional<FfiFunctionInfo> ffi_info;   // If the word is a FFI word.
 
             llvm::Function* function;   // The compiled function or declaration for the word.
         };
@@ -107,7 +193,10 @@ namespace sorth::compilation
 
 
         struct WordCollection;
+
+
         void try_resolve_calls(WordCollection& collection, byte_code::ByteCode& code);
+
 
         void mark_used_words(WordCollection& collection, const byte_code::ByteCode& code);
 
@@ -120,6 +209,245 @@ namespace sorth::compilation
 
             WordInfoList words;
             WordMap word_map;
+
+            FfiTypeMap ffi_types;
+
+            WordCollection(llvm::LLVMContext& context)
+            {
+                auto char_type = llvm::Type::getInt8Ty(context);
+                auto char_ptr_type = llvm::PointerType::get(char_type, 0);
+
+                auto null_free = [](llvm::IRBuilder<>& builder,
+                                    const RuntimeApi& runtime,
+                                    llvm::Value* variable) -> void
+                    {
+                        // Do nothing...
+                    };
+
+                // Add the standard types to the ffi type map.
+                ffi_types["ffi.void"] =
+                    {
+                        .type = llvm::Type::getVoidTy(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                // Nothing to do.
+                                return nullptr;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                // Nothing to do.
+                            }
+                    };
+
+                ffi_types["ffi.bool"] =
+                    {
+                        .type = llvm::Type::getInt1Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                return builder.CreateCall(runtime.stack_pop_bool, variable);
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                builder.CreateCall(runtime.stack_push_bool, variable);
+                            }
+                    };
+
+                ffi_types["ffi.i8"] =
+                    {
+                        .type = llvm::Type::getInt8Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto int64_type = llvm::Type::getInt64Ty(context);
+                                auto int8_type = llvm::Type::getInt8Ty(context);
+
+                                // Allocate a full-sized int to hold the stack value.  Then pop the
+                                // value from the stack and store it in the variable.
+                                auto temp_value = builder.CreateAlloca(int64_type);
+                                auto result = builder.CreateCall(runtime.stack_pop_int, temp_value);
+
+                                // Truncate the value to 8-bits.
+                                auto large = builder.CreateLoad(int64_type, temp_value);
+                                auto truncated_value = builder.CreateTrunc(result, int8_type);
+
+                                // Store the value in the output variable.
+                                builder.CreateStore(truncated_value, variable);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+
+                                // Sign extend the value to 64-bits, thus preserving the sign bit.
+                                auto extended_value = builder.CreateSExt(variable, int64_type);
+
+                                // Push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_int, extended_value);
+                            }
+                    };
+
+                ffi_types["ffi.u8"] =
+                    {
+                        .type = llvm::Type::getInt8Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto int64_type = llvm::Type::getInt64Ty(context);
+                                auto int8_type = llvm::Type::getInt8Ty(context);
+
+                                // Allocate a full-sized int to hold the stack value.  Then pop the
+                                // value from the stack and store it in the variable.
+                                auto temp_value = builder.CreateAlloca(int64_type);
+                                auto result = builder.CreateCall(runtime.stack_pop_int, temp_value);
+
+                                // Truncate the value to 8-bits.
+                                auto large = builder.CreateLoad(int64_type, temp_value);
+                                auto truncated_value = builder.CreateTrunc(result, int8_type);
+
+                                // Store the value in the output variable.
+                                builder.CreateStore(truncated_value, variable);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+
+                                // Extend the value to 64-bits.
+                                auto extended_value = builder.CreateZExt(variable, int64_type);
+
+                                // Push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_int, extended_value);
+                            }
+                    };
+
+                //ffi_types["ffi.i16"]    = llvm::Type::getInt16Ty(context);
+                //ffi_types["ffi.u16"]    = llvm::Type::getInt16Ty(context);
+                //ffi_types["ffi.i32"]    = llvm::Type::getInt32Ty(context);
+                //ffi_types["ffi.u32"]    = llvm::Type::getInt32Ty(context);
+                //ffi_types["ffi.i64"]    = llvm::Type::getInt64Ty(context);
+                //ffi_types["ffi.u64"]    = llvm::Type::getInt64Ty(context);
+                //ffi_types["ffi.f32"]    = llvm::Type::getFloatTy(context);
+
+                ffi_types["ffi.f32"] =
+                    {
+                        .type = llvm::Type::getFloatTy(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto float_type = llvm::Type::getFloatTy(context);
+                                auto double_type = llvm::Type::getDoubleTy(context);
+                                auto float_ptr_type = llvm::PointerType::get(double_type, 0);
+
+                                // Allocate a full-sized double to hold the stack value.  Then pop
+                                // the value from the stack and store it in the variable.
+                                auto temp_value = builder.CreateAlloca(double_type);
+                                auto result = builder.CreateCall(runtime.stack_pop_double,
+                                                                 temp_value);
+
+                                // Truncate the value to 32-bits.
+                                auto large = builder.CreateLoad(double_type, temp_value);
+                                auto truncated_value = builder.CreateFPTrunc(result, float_type);
+
+                                // Store the value in the output variable.
+                                builder.CreateStore(truncated_value, variable);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                auto double_type = llvm::Type::getDoubleTy(builder.getContext());
+
+                                // Extend the value to 64-bits.
+                                auto extended_value = builder.CreateFPExt(variable, double_type);
+
+                                // Push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_double, extended_value);
+                            }
+                    };
+
+                ffi_types["ffi.f64"] =
+                    {
+                        .type = llvm::Type::getDoubleTy(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto double_type = llvm::Type::getDoubleTy(context);
+
+                                // No coversion needed, just pop the value from the stack and store
+                                // it in the variable.
+                                return builder.CreateCall(runtime.stack_pop_double, { variable });
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                // Nothing fancy to do here, just push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_double, { variable });
+                            }
+                    };
+
+                //ffi_types["ffi.string"] = char_ptr_type;
+            }
+
+            FfiTypeInfo& find_type(const std::string& name, const std::string& ref_name)
+            {
+                auto iterator = ffi_types.find(name);
+
+                if (iterator == ffi_types.end())
+                {
+                    throw_error("Unknown FFI type: " + name + " referenced in " + ref_name + ".");
+                }
+
+                return iterator->second;
+            }
 
             // Add a structure to our collection.
             void add_structure(const byte_code::StructureType& structure)
@@ -220,45 +548,6 @@ namespace sorth::compilation
         }
 
 
-        // The API as exposed by the runtime-library that's intended to be called directly by the
-        // generated code.
-        struct RuntimeApi
-        {
-            // The value structure type.
-            llvm::StructType* value_struct_type;
-            llvm::PointerType* value_struct_ptr_type;
-            llvm::ArrayType* value_struct_ptr_array_type;
-
-            // External variable functions.
-            llvm::Function* initialize_variable;
-            llvm::Function* free_variable;
-            llvm::Function* allocate_variable_block;
-            llvm::Function* release_variable_block;
-            llvm::Function* read_variable;
-            llvm::Function* write_variable;
-            llvm::Function* deep_copy_variable;
-
-            // External stack functions.
-            llvm::Function* stack_push;
-            llvm::Function* stack_push_int;
-            llvm::Function* stack_push_double;
-            llvm::Function* stack_push_bool;
-            llvm::Function* stack_push_string;
-            llvm::Function* stack_pop;
-            llvm::Function* stack_pop_int;
-            llvm::Function* stack_pop_bool;
-
-            // User structure functions.
-            llvm::Function* register_structure_type;
-
-            // External error functions.
-            llvm::Function* set_last_error;
-            llvm::Function* get_last_error;
-            llvm::Function* push_last_error;
-            llvm::Function* clear_last_error;
-        };
-
-
         // Register the runtime API with the module.
         RuntimeApi register_runtime_api(std::shared_ptr<llvm::Module>& module)
         {
@@ -271,6 +560,7 @@ namespace sorth::compilation
             auto char_ptr_type = llvm::PointerType::getUnqual(bool_type);
 
             auto uint64_ptr_type = llvm::PointerType::getUnqual(uint64_type);
+            auto double_ptr_type = llvm::PointerType::getUnqual(double_type);
 
             auto byte_type = llvm::Type::getInt8Ty(module->getContext());
             auto byte_array_type = llvm::ArrayType::get(byte_type, value_size);
@@ -406,6 +696,14 @@ namespace sorth::compilation
                                                          "stack_pop_bool",
                                                          module.get());
 
+            auto stack_pop_double_signature = llvm::FunctionType::get(bool_type,
+                                                                      { double_ptr_type },
+                                                                      false);
+            auto stack_pop_double = llvm::Function::Create(stack_pop_double_signature,
+                                                           llvm::Function::ExternalLinkage,
+                                                           "stack_pop_double",
+                                                           module.get());
+
             // Register the user structure functions.
             auto register_structure_type_signature = llvm::FunctionType::get(void_type,
                                                                 {
@@ -469,6 +767,7 @@ namespace sorth::compilation
                     .stack_pop = stack_pop,
                     .stack_pop_int = stack_pop_int,
                     .stack_pop_bool = stack_pop_bool,
+                    .stack_pop_double = stack_pop_double,
 
                     .register_structure_type = register_structure_type,
 
@@ -650,6 +949,112 @@ namespace sorth::compilation
                     collection.add_word(field_write_word);
                     collection.add_word(field_write_var_word);
                 }
+            }
+        }
+
+
+        void register_ffi_structures(const byte_code::ScriptPtr& script, WordCollection& collection)
+        {
+            // First register the structures in the sub-scripts.
+            for (const auto& sub_script : script->get_sub_scripts())
+            {
+                register_ffi_structures(sub_script, collection);
+            }
+
+            // Now register the structures in this script.
+            for (const auto& structure : script->get_structure_types())
+            {
+                if (structure.get_ffi_info().has_value())
+                {
+                    // Create the llvm structure type for the FFI structure.
+                    const auto& ffi_info = structure.get_ffi_info().value();
+                    std::vector<FfiTypeInfo> field_types;
+                    std::vector<llvm::Type*> raw_types;
+
+                    field_types.reserve(ffi_info.field_types.size());
+
+                    // Translate the type names to llvm types.
+                    for (const auto& field_type : ffi_info.field_types)
+                    {
+                        const auto& type_info =
+                                          collection.find_type(field_type,
+                                                               "structure " + structure.get_name());
+
+                        field_types.push_back(type_info);
+                        raw_types.push_back(type_info.type);
+                    }
+
+                    // Create a llvm structure type for the FFI structure.
+                    auto struct_type = llvm::StructType::create(raw_types, structure.get_name());
+
+                    // Register the new type.
+                    // TODO: Create the push/pop/free functions for the structure type.
+                    // collection.ffi_types[structure.get_name()] = struct_type;
+                }
+            }
+        }
+
+
+        // Generate the FFI words for the script and it's subscripts.
+        void generate_ffi_words(const byte_code::ScriptPtr& script, WordCollection& collection,
+                                std::shared_ptr<llvm::Module>& module)
+        {
+            // Generate the FFI words for the sub-scripts of this script first...
+            for (const auto& sub_script : script->get_sub_scripts())
+            {
+                generate_ffi_words(sub_script, collection, module);
+            }
+
+            // Now generate the FFI words for this script.
+            for (const auto& function : script->get_ffi_functions())
+            {
+                // Gather the information for the external function reference.
+                FfiFunctionInfo function_info;
+
+                // Keep track of the parameter types for the function signature.
+                std::vector<llvm::Type*> parameter_types;
+                parameter_types.reserve(function.argument_types.size());
+
+                function_info.name = function.name;
+                function_info.return_type = collection.find_type(function.return_type,
+                                                                 function.alias);
+                function_info.parameters.reserve(function.argument_types.size());
+
+                for (const auto& argument : function.argument_types)
+                {
+                    FfiFunctionParameter parameter;
+
+                    parameter.type_name = argument;
+                    parameter.type = collection.find_type(argument, function.alias);
+                    parameter_types.push_back(parameter.type.type);
+
+                    function_info.parameters.push_back(std::move(parameter));
+                }
+
+                // Create the foreign function's signature and declaration.
+                llvm::FunctionType* signature =
+                                             llvm::FunctionType::get(function_info.return_type.type,
+                                                                     parameter_types,
+                                                                     false);
+                llvm::Function* function_declaration =
+                                             llvm::Function::Create(signature,
+                                                                    llvm::Function::ExternalLinkage,
+                                                                    function.name,
+                                                                    module.get());
+
+                // Register the function with the collection.
+                function_info.function = function_declaration;
+
+                // Now register the wrapper word for the external function reference.
+                WordInfo word_info;
+
+                word_info.name = function.alias;
+                word_info.handler_name = filter_word_name(function.alias);
+                word_info.was_referenced = false;
+                word_info.ffi_info = std::move(function_info);
+                word_info.function = nullptr;
+
+                collection.add_word(std::move(word_info));
             }
         }
 
@@ -1629,6 +2034,66 @@ namespace sorth::compilation
         }
 
 
+        // Generate the IR that translates values from the data-stack to parameters for the foreign
+        // function call.  Then translate the return value from the foreign function to a value that
+        // can be pushed back onto the data-stack.
+        void generate_ir_for_ffi_function(WordCollection& collection,
+                                          const WordInfo& word,
+                                          std::shared_ptr<llvm::Module>& module,
+                                          llvm::LLVMContext& context,
+                                          llvm::IRBuilder<>& builder,
+                                          const RuntimeApi& runtime_api)
+        {
+            auto bool_type = llvm::Type::getInt1Ty(module->getContext());
+
+            // Create the entry block of the function.
+            auto entry_block = llvm::BasicBlock::Create(context, "entry_block", word.function);
+            builder.SetInsertPoint(entry_block);
+
+            auto return_value_variable = builder.CreateAlloca(bool_type);
+            builder.CreateStore(builder.getInt1(0), return_value_variable);
+
+            // Create blocks for all of the pops we'll need to do.
+
+            std::vector<llvm::AllocaInst*> parameter_variables;
+            parameter_variables.reserve(word.ffi_info->parameters.size());
+
+            // Allocate variables for all of the function parameters.
+            for (const auto& parameter : word.ffi_info->parameters)
+            {
+                auto variable = builder.CreateAlloca(parameter.type.type);
+                parameter_variables.push_back(variable);
+
+                // Pop the value for the parameter off of the stack.
+                parameter.type.pop_value(builder, runtime_api, variable);
+            }
+
+
+            // Call the foreign function.
+            std::vector<llvm::Value*> parameter_values;
+
+            parameter_values.reserve(word.ffi_info->parameters.size());
+
+            for (size_t i = 0; i < word.ffi_info->parameters.size(); ++i)
+            {
+                auto loaded_variable = builder.CreateLoad(word.ffi_info->parameters[i].type.type,
+                                                          parameter_variables[i]);
+
+                parameter_values.push_back(loaded_variable);
+            }
+
+            // Call the external function.
+            auto call_result = builder.CreateCall(word.ffi_info->function, parameter_values);
+
+            // Push the return value back onto the stack.
+            word.ffi_info->return_type.push_value(builder, runtime_api, call_result);
+
+            // Return and pass the return value.
+            auto return_value = builder.CreateLoad(bool_type, return_value_variable);
+            builder.CreateRet(return_value);
+        }
+
+
         // Go through the collection of words and compile the ones that were referenced.
         void compile_used_words(WordCollection& collection,
                                 std::shared_ptr<llvm::Module>& module,
@@ -1640,20 +2105,36 @@ namespace sorth::compilation
             for (const auto& word : collection.words)
             {
                 // If the word was referenced and is a Forth word...
-                if (   (word.was_referenced)
-                    && (word.code.has_value()))
+                if (word.was_referenced)
                 {
-                    // Create the word's IR function body.
-                    generate_ir_for_byte_code(collection,
-                                              word.name,
-                                              word.code.value(),
-                                              module,
-                                              context,
-                                              builder,
-                                              word.function,
-                                              global_constant_map,
-                                              runtime_api,
-                                              false);
+                    // Is this a Forth word?  Or is it a wrapper for a foreign function?
+                    if (word.code.has_value())
+                    {
+                        // Create the word's IR function body.
+                        generate_ir_for_byte_code(collection,
+                                                  word.name,
+                                                  word.code.value(),
+                                                  module,
+                                                  context,
+                                                  builder,
+                                                  word.function,
+                                                  global_constant_map,
+                                                  runtime_api,
+                                                  false);
+                    }
+                    else if (word.ffi_info.has_value())
+                    {
+                        // Create the word's wrapper code for the underlying FFI function.
+                        generate_ir_for_ffi_function(collection,
+                                                     word,
+                                                     module,
+                                                     context,
+                                                     builder,
+                                                     runtime_api);
+                    }
+
+                    // Looks like it's a word from the run-time library.  So there's nothing to do
+                    // here.
                 }
             }
         }
@@ -1773,7 +2254,7 @@ namespace sorth::compilation
 
         // Gather all the words from the runtime, the standard library, and the script and it's
         // sub-scripts.
-        WordCollection words;
+        WordCollection words(context);
 
         gather_runtime_words(words);
         gather_script_words(standard_library, words);
@@ -1783,6 +2264,14 @@ namespace sorth::compilation
         // be used to init and access the script's data structures.
         create_structure_words(standard_library, words);
         create_structure_words(script, words);
+
+        // Register the FFI structures with the ffi type-system.
+        register_ffi_structures(standard_library, words);
+        register_ffi_structures(script, words);
+
+        // Generate words for all the FFI functions from the runtime and the standard library.
+        generate_ffi_words(standard_library, words, module);
+        generate_ffi_words(script, words, module);
 
         // Now that all words have been gathered, we can try to resolve all calls one last time.
         // After this the only unresolved calls should be variable and constant accesses which will
@@ -1832,6 +2321,8 @@ namespace sorth::compilation
             throw_error("Generated LLVM IR module is invalid.");
         }
 
+        module->print(llvm::outs(), nullptr);
+
         // Apply LLVM optimization passes to the module.
         optimize_module(module);
 
@@ -1864,7 +2355,7 @@ namespace sorth::compilation
         module->setDataLayout(target_machine->createDataLayout());
 
         // Uncomment the following line to print the module to stdout for debugging.
-        // module->print(llvm::outs(), nullptr);
+        //module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;

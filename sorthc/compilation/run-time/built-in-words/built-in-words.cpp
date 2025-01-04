@@ -771,7 +771,7 @@ namespace sorth::compilation::run_time::built_in_words
             byte_code::FfiFunction function;
 
             function.name = name;
-            function.alias = alias;
+            function.alias = alias == "" ? name : alias;
             function.return_type = ret_type;
 
             function.argument_types.reserve(arguments_value->size());

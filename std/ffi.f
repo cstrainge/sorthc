@@ -10,7 +10,7 @@
     word variable! next
 
     ( Check to see if the 'as' keyword was supplied, indicating an alias. )
-    word dup "as"  <>
+    next @ "as" =
     if
         ( We've been given an alias for the function. )
         word alias !
@@ -25,7 +25,7 @@
         next @ "->" <>
     while
         ( Add the argument type to the list. )
-        next @  arguments [].push_back!!
+        next @ arguments [].push_back!!
 
         ( Get the next word. )
         word next !

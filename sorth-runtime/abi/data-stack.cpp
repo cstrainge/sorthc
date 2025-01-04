@@ -115,4 +115,25 @@ extern "C"
     }
 
 
+    int8_t stack_pop_double(double* value)
+    {
+        if (data_stack.empty())
+        {
+            return 1;
+        }
+
+        auto new_value = data_stack.back();
+        data_stack.pop_back();
+
+        if (!new_value.is_numeric())
+        {
+            return 1;
+        }
+
+        *value = new_value.get_double();
+
+        return 0;
+    }
+
+
 }
