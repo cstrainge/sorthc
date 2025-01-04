@@ -111,7 +111,9 @@ extern "C"
             {
                 std::stringstream message;
 
-                message << "string.remove end index, " << start + count << ", outside of the string.";
+                message << "string.remove end index, " << start + count
+                        << ", outside of the string.";
+
                 set_last_error(message.str().c_str());
 
                 return 1;
