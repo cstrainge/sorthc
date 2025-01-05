@@ -354,13 +354,219 @@ namespace sorth::compilation
                             }
                     };
 
-                //ffi_types["ffi.i16"]    = llvm::Type::getInt16Ty(context);
-                //ffi_types["ffi.u16"]    = llvm::Type::getInt16Ty(context);
-                //ffi_types["ffi.i32"]    = llvm::Type::getInt32Ty(context);
-                //ffi_types["ffi.u32"]    = llvm::Type::getInt32Ty(context);
-                //ffi_types["ffi.i64"]    = llvm::Type::getInt64Ty(context);
-                //ffi_types["ffi.u64"]    = llvm::Type::getInt64Ty(context);
-                //ffi_types["ffi.f32"]    = llvm::Type::getFloatTy(context);
+                ffi_types["ffi.i16"] =
+                    {
+                        .type = llvm::Type::getInt16Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto int64_type = llvm::Type::getInt64Ty(context);
+                                auto int16_type = llvm::Type::getInt16Ty(context);
+
+                                // Allocate a full-sized int to hold the stack value.  Then pop the
+                                // value from the stack and store it in the variable.
+                                auto temp_value = builder.CreateAlloca(int64_type);
+                                auto result = builder.CreateCall(runtime.stack_pop_int, temp_value);
+
+                                // Truncate the value to 16-bits.
+                                auto large = builder.CreateLoad(int64_type, temp_value);
+                                auto truncated_value = builder.CreateTrunc(result, int16_type);
+
+                                // Store the value in the output variable.
+                                builder.CreateStore(truncated_value, variable);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+
+                                // Sign extend the value to 64-bits, thus preserving the sign bit.
+                                auto extended_value = builder.CreateSExt(variable, int64_type);
+
+                                // Push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_int, extended_value);
+                            }
+                    };
+
+                ffi_types["ffi.u16"] =
+                    {
+                        .type = llvm::Type::getInt16Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto int64_type = llvm::Type::getInt64Ty(context);
+                                auto int16_type = llvm::Type::getInt16Ty(context);
+
+                                // Allocate a full-sized int to hold the stack value.  Then pop the
+                                // value from the stack and store it in the variable.
+                                auto temp_value = builder.CreateAlloca(int64_type);
+                                auto result = builder.CreateCall(runtime.stack_pop_int, temp_value);
+
+                                // Truncate the value to 16-bits.
+                                auto large = builder.CreateLoad(int64_type, temp_value);
+                                auto truncated_value = builder.CreateTrunc(result, int16_type);
+
+                                // Store the value in the output variable.
+                                builder.CreateStore(truncated_value, variable);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+
+                                // Extend the value to 64-bits.
+                                auto extended_value = builder.CreateZExt(variable, int64_type);
+
+                                // Push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_int, extended_value);
+                            }
+                    };
+
+                ffi_types["ffi.i32"] =
+                    {
+                        .type = llvm::Type::getInt32Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto int64_type = llvm::Type::getInt64Ty(context);
+                                auto int32_type = llvm::Type::getInt32Ty(context);
+
+                                // Allocate a full-sized int to hold the stack value.  Then pop the
+                                // value from the stack and store it in the variable.
+                                auto temp_value = builder.CreateAlloca(int64_type);
+                                auto result = builder.CreateCall(runtime.stack_pop_int, temp_value);
+
+                                // Truncate the value to 32-bits.
+                                auto large = builder.CreateLoad(int64_type, temp_value);
+                                auto truncated_value = builder.CreateTrunc(result, int32_type);
+
+                                // Store the value in the output variable.
+                                builder.CreateStore(truncated_value, variable);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+
+                                // Sign extend the value to 64-bits, thus preserving the sign bit.
+                                auto extended_value = builder.CreateSExt(variable, int64_type);
+
+                                // Push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_int, extended_value);
+                            }
+                    };
+
+                ffi_types["ffi.u32"] =
+                    {
+                        .type = llvm::Type::getInt32Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                auto& context = builder.getContext();
+                                auto int64_type = llvm::Type::getInt64Ty(context);
+                                auto int32_type = llvm::Type::getInt32Ty(context);
+
+                                // Allocate a full-sized int to hold the stack value.  Then pop the
+                                // value from the stack and store it in the variable.
+                                auto temp_value = builder.CreateAlloca(int64_type);
+                                auto result = builder.CreateCall(runtime.stack_pop_int, temp_value);
+
+                                // Truncate the value to 32-bits.
+                                auto large = builder.CreateLoad(int64_type, temp_value);
+                                auto truncated_value = builder.CreateTrunc(result, int32_type);
+
+                                // Store the value in the output variable.
+                                builder.CreateStore(truncated_value, variable);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+
+                                // Extend the value to 64-bits.
+                                auto extended_value = builder.CreateZExt(variable, int64_type);
+
+                                // Push the value onto the stack.
+                                builder.CreateCall(runtime.stack_push_int, extended_value);
+                            }
+                    };
+
+                ffi_types["ffi.i64"] =
+                    {
+                        .type = llvm::Type::getInt64Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                return builder.CreateCall(runtime.stack_pop_int, variable);
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                builder.CreateCall(runtime.stack_push_int, variable);
+                            }
+                    };
+
+                ffi_types["ffi.u64"] =
+                    {
+                        .type = llvm::Type::getInt64Ty(context),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                return builder.CreateCall(runtime.stack_pop_int, variable);
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                builder.CreateCall(runtime.stack_push_int, variable);
+                            }
+                    };
 
                 ffi_types["ffi.f32"] =
                     {
@@ -418,7 +624,7 @@ namespace sorth::compilation
                                 auto& context = builder.getContext();
                                 auto double_type = llvm::Type::getDoubleTy(context);
 
-                                // No coversion needed, just pop the value from the stack and store
+                                // No conversion needed, just pop the value from the stack and store
                                 // it in the variable.
                                 return builder.CreateCall(runtime.stack_pop_double, { variable });
                             },
@@ -2320,8 +2526,6 @@ namespace sorth::compilation
         {
             throw_error("Generated LLVM IR module is invalid.");
         }
-
-        module->print(llvm::outs(), nullptr);
 
         // Apply LLVM optimization passes to the module.
         optimize_module(module);
