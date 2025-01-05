@@ -2256,22 +2256,43 @@ namespace sorth::compilation
             auto entry_block = llvm::BasicBlock::Create(context, "entry_block", word.function);
             builder.SetInsertPoint(entry_block);
 
+            std::vector<llvm::BasicBlock*> jump_blocks;
+            jump_blocks.reserve(word.ffi_info->parameters.size());
+
             auto return_value_variable = builder.CreateAlloca(bool_type);
             builder.CreateStore(builder.getInt1(0), return_value_variable);
 
             // Create blocks for all of the pops we'll need to do.
+            for (size_t i = 0; i < word.ffi_info->parameters.size(); ++i)
+            {
+                std::stringstream stream;
+
+                stream << "block_" << i + 1;
+                jump_blocks.push_back(llvm::BasicBlock::Create(context,
+                                                               stream.str(),
+                                                               word.function));
+            }
+
+            auto exit_error_block = llvm::BasicBlock::Create(context, "error_block", word.function);
+            auto exit_block = llvm::BasicBlock::Create(context, "exit_block", word.function);
 
             std::vector<llvm::AllocaInst*> parameter_variables;
             parameter_variables.reserve(word.ffi_info->parameters.size());
 
             // Allocate variables for all of the function parameters.
-            for (const auto& parameter : word.ffi_info->parameters)
+            for (size_t i = 0; i < word.ffi_info->parameters.size(); ++i)
             {
+                const auto& parameter = word.ffi_info->parameters[i];
+
                 auto variable = builder.CreateAlloca(parameter.type.type);
                 parameter_variables.push_back(variable);
 
                 // Pop the value for the parameter off of the stack.
-                parameter.type.pop_value(builder, runtime_api, variable);
+                auto result = parameter.type.pop_value(builder, runtime_api, variable);
+
+                auto cmp = builder.CreateICmpNE(result, builder.getInt1(0));
+                builder.CreateCondBr(cmp, exit_error_block, jump_blocks[i]);
+                builder.SetInsertPoint(jump_blocks[i]);
             }
 
 
@@ -2293,8 +2314,15 @@ namespace sorth::compilation
 
             // Push the return value back onto the stack.
             word.ffi_info->return_type.push_value(builder, runtime_api, call_result);
+            builder.CreateBr(exit_block);
+
+            // Generate the error block.
+            builder.SetInsertPoint(exit_error_block);
+            builder.CreateStore(builder.getInt1(1), return_value_variable);
+            builder.CreateBr(exit_block);
 
             // Return and pass the return value.
+            builder.SetInsertPoint(exit_block);
             auto return_value = builder.CreateLoad(bool_type, return_value_variable);
             builder.CreateRet(return_value);
         }
@@ -2559,7 +2587,7 @@ namespace sorth::compilation
         module->setDataLayout(target_machine->createDataLayout());
 
         // Uncomment the following line to print the module to stdout for debugging.
-        //module->print(llvm::outs(), nullptr);
+        module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;
