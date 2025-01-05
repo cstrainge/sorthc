@@ -118,6 +118,8 @@ namespace sorth::compilation
             llvm::Function* stack_pop_int;
             llvm::Function* stack_pop_bool;
             llvm::Function* stack_pop_double;
+            llvm::Function* stack_pop_string;
+            llvm::Function* stack_free_string;
 
             // User structure functions.
             llvm::Function* register_structure_type;
@@ -640,7 +642,31 @@ namespace sorth::compilation
                             }
                     };
 
-                //ffi_types["ffi.string"] = char_ptr_type;
+                ffi_types["ffi.string"] =
+                    {
+                        .type = char_ptr_type,
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                return builder.CreateCall(runtime.stack_pop_string, variable);
+                            },
+
+                        .free_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                builder.CreateCall(runtime.stack_free_string, variable);
+                            },
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                builder.CreateCall(runtime.stack_push_string, variable);
+                            }
+                    };
             }
 
             FfiTypeInfo& find_type(const std::string& name, const std::string& ref_name)
@@ -764,6 +790,7 @@ namespace sorth::compilation
             auto double_type = llvm::Type::getDoubleTy(module->getContext());
             auto bool_type = llvm::Type::getInt1Ty(module->getContext());
             auto char_ptr_type = llvm::PointerType::getUnqual(bool_type);
+            auto char_ptr_ptr_type = llvm::PointerType::getUnqual(char_ptr_type);
 
             auto uint64_ptr_type = llvm::PointerType::getUnqual(uint64_type);
             auto double_ptr_type = llvm::PointerType::getUnqual(double_type);
@@ -910,6 +937,22 @@ namespace sorth::compilation
                                                            "stack_pop_double",
                                                            module.get());
 
+            auto stack_pop_string_signature = llvm::FunctionType::get(bool_type,
+                                                                      { char_ptr_ptr_type },
+                                                                      false);
+            auto stack_pop_string = llvm::Function::Create(stack_pop_string_signature,
+                                                           llvm::Function::ExternalLinkage,
+                                                           "stack_pop_string",
+                                                           module.get());
+
+            auto stack_free_string_signature = llvm::FunctionType::get(void_type,
+                                                                       { char_ptr_type },
+                                                                       false);
+            auto stack_free_string = llvm::Function::Create(stack_free_string_signature,
+                                                            llvm::Function::ExternalLinkage,
+                                                            "stack_free_string",
+                                                            module.get());
+
             // Register the user structure functions.
             auto register_structure_type_signature = llvm::FunctionType::get(void_type,
                                                                 {
@@ -974,6 +1017,8 @@ namespace sorth::compilation
                     .stack_pop_int = stack_pop_int,
                     .stack_pop_bool = stack_pop_bool,
                     .stack_pop_double = stack_pop_double,
+                    .stack_pop_string = stack_pop_string,
+                    .stack_free_string = stack_free_string,
 
                     .register_structure_type = register_structure_type,
 
@@ -1987,18 +2032,6 @@ namespace sorth::compilation
                             }
                             else
                             {
-                                // The value is a complex type that we can't inline in the JITed
-                                // code directly.  So we'll add it to the constants array and
-                                // generate code to push the value from the array onto the
-                                // stack.
-                                /*auto index = constants.size();
-                                constants.push_back(value);
-
-                                auto index_const = builder.getInt64(index);
-                                builder.CreateCall(handle_push_value_fn,
-                                                    { runtime_ptr,
-                                                        constant_arr_ptr,
-                                                        index_const });*/
                                 throw_error("TODO: Implement complex constant types.");
                             }
                         }
@@ -2315,6 +2348,17 @@ namespace sorth::compilation
             // Push the return value back onto the stack.
             word.ffi_info->return_type.push_value(builder, runtime_api, call_result);
             builder.CreateBr(exit_block);
+
+            // Free any extra data from the parameters.
+            for (size_t i = 0; i < word.ffi_info->parameters.size(); ++i)
+            {
+                word.ffi_info->parameters[i].type.free_value(builder,
+                                                             runtime_api,
+                                                             parameter_variables[i]);
+            }
+
+            // Free the return value.
+            word.ffi_info->return_type.free_value(builder, runtime_api, call_result);
 
             // Generate the error block.
             builder.SetInsertPoint(exit_error_block);
