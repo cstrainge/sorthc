@@ -381,6 +381,11 @@ namespace sorth::source
                     int64_t value = (int64_t)std::stoll(filtered_text, nullptr, 16);
                     new_token = Token(location, value);
                 }
+                else if ((filtered_text[0] == '0') && (filtered_text[1] == 'o'))
+                {
+                    int64_t value = (int64_t)std::stoll(filtered_text.substr(2), nullptr, 8);
+                    new_token = Token(location, value);
+                }
                 else if ((filtered_text[0] == '0') && (filtered_text[1] == 'b'))
                 {
                     int64_t value = (int64_t)std::stoll(filtered_text.substr(2), nullptr, 2);
