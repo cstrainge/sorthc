@@ -20,21 +20,17 @@ extern "C"
     uint8_t word_posix_open()
     {
         int64_t flags;
-        int64_t mode;
         Value path_value;
 
-        int fd = -1;
+        auto pop_result_1 = stack_pop_int(&flags);
+        auto pop_result_2 = stack_pop(&path_value);
 
-        auto pop_result_1 = stack_pop_int(&mode);
-        auto pop_result_2 = stack_pop_int(&flags);
-        auto pop_result_3 = stack_pop(&path_value);
-
-        if (pop_result_1 || pop_result_2 || pop_result_3 || !path_value.is_string())
+        if (pop_result_1 || pop_result_2 || !path_value.is_string())
         {
             return 1;
         }
 
-        fd = open(path_value.get_string().c_str(), flags | mode, 0);
+        int fd = open(path_value.get_string().c_str(), flags, 0);
 
         stack_push_int(fd);
 
@@ -62,6 +58,14 @@ extern "C"
         }
 
         errno = value;
+
+        return 0;
+    }
+
+
+    uint8_t word_posix_strerror()
+    {
+        stack_push_string(strerror(errno));
 
         return 0;
     }
@@ -130,14 +134,7 @@ extern "C"
         }
         while (buffer->position() < total_size);
 
-        if (result == -1)
-        {
-            std::string message = "Error reading from fd " + std::to_string(fd) + ": " +
-                                  std::string(strerror(errno)) + ".";
-
-            set_last_error(message.c_str());
-            return 1;
-        }
+        stack_push_int(result);
 
         return 0;
     }
@@ -185,14 +182,7 @@ extern "C"
         }
         while (buffer->position() < total_size);
 
-        if (result == -1)
-        {
-            std::string message = "Error writing to fd " + std::to_string(fd) + ": " +
-                                  std::string(strerror(errno)) + ".";
-
-            set_last_error(message.c_str());
-            return 1;
-        }
+        stack_push_int(result);
 
         return 0;
     }
@@ -281,6 +271,7 @@ namespace sorth::run_time::abi::words
         registrar("posix.open", "word_posix_open");
         registrar("posix.errno", "word_posix_errno");
         registrar("posix.set-errno", "word_posix_set_errno");
+        registrar("posix.strerror", "word_posix_strerror");
         registrar("posix.fcntl", "word_posix_fcntl");
         registrar("posix.read-buffer", "word_posix_read_buffer");
         registrar("posix.write-buffer", "word_posix_write_buffer");

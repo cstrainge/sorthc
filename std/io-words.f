@@ -3,22 +3,68 @@
 
 
 
-( Error codes. )
+( POSIX error codes. )
+1   constant posix.EPERM
+2   constant posix.ENOENT
+3   constant posix.ESRCH
 4   constant posix.EINTR
-
+5   constant posix.EIO
+6   constant posix.ENXIO
+7   constant posix.E2BIG
+8   constant posix.ENOEXEC
+9   constant posix.EBADF
+10  constant posix.ECHILD
+11  constant posix.EAGAIN
+12  constant posix.ENOMEM
+13  constant posix.EACCES
+14  constant posix.EFAULT
+15  constant posix.ENOTBLK
+16  constant posix.EBUSY
+17  constant posix.EEXIST
+18  constant posix.EXDEV
+19  constant posix.ENODEV
+20  constant posix.ENOTDIR
+21  constant posix.EISDIR
+22  constant posix.EINVAL
+23  constant posix.ENFILE
+24  constant posix.EMFILE
+25  constant posix.ENOTTY
+26  constant posix.ETXTBSY
+27  constant posix.EFBIG
+28  constant posix.ENOSPC
+29  constant posix.ESPIPE
+30  constant posix.EROFS
+31  constant posix.EMLINK
+32  constant posix.EPIPE
+33  constant posix.EDOM
+34  constant posix.ERANGE
 
 
 ( File permission flags. )
 64  constant posix.O_CREAT
 512 constant posix.O_TRUNC
 
-256 constant posix.S_IRUSR
-128 constant posix.S_IWUSR
-32  constant posix.S_IRGRP
-4   constant posix.S_IROTH
+
+( File system permission flags. )
+0o400 constant posix.S_IRUSR
+0o200 constant posix.S_IWUSR
+0o100 constant posix.S_IXUSR
+
+0o040 constant posix.S_IRGRP
+0o020 constant posix.S_IWGRP
+0o010 constant posix.S_IXGRP
+
+0o004 constant posix.S_IROTH
+0o002 constant posix.S_IWOTH
+0o001 constant posix.S_IXOTH
+
+
 
 1   constant posix.F_GETFD
 
+
+
+( File seeking flags. )
 0   constant posix.SEEK_SET
 1   constant posix.SEEK_CUR
 2   constant posix.SEEK_END
@@ -37,6 +83,8 @@
 ( posix.errno is implemented in the run-time library. )
 
 ( posix.set-errno is implemented in the run-time library. )
+
+( posix.strerror is implemented in the run-time library. )
 
 ( posix.fcntl is implemented in the run-time library. )
 
@@ -67,53 +115,68 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 
     ( The file descriptor for the open file. )
     -1 variable! file-fd
+    -1 variable! chmod-error
+
+    ( Set some default values for the file permissions if we end up creating the file. )
+    posix.S_IRUSR posix.S_IWUSR | posix.S_IRGRP | posix.S_IROTH | variable! file-permissions
+
+    ( Clear the last error, if any. )
+    0 posix.set-errno
 
     ( Check to see if the file already exists. )
     path @ file.exists? variable! is-new?
 
     ( Attempt to open the file, keeping in mind we may be interrupted by a signal. )
     begin
-        file-fd -1 =
-        posix.errno posix.EINTR =
-        &&
-    while
-        path @ mode extra-flags posix.open file-fd !
-    repeat
+        path @  mode @ extra-flags @ |  posix.open  file-fd !
+
+        file-fd @ -1 <>
+        posix.errno posix.EINTR <>
+        ||
+    until
 
     ( Were we able to open the file? )
     file-fd @ -1 =
     if
-        path @ "Unable to open file {}." string.format throw
+        path @ posix.strerror "Unable to open file {}: {}." string.format throw
     then
+
+    ( Clear the last error, if any. )
+    0 posix.set-errno
 
     ( If the file didn't exist before, set some reasonable file permissions. )
     is-new? @
     if
-        file-fd @ posix.S_IRUSR posix.S_IWUSR | posix.S_IRGRP | posix.S_IROTH | posix.chmod
+        begin
+            file-fd @ file-permissions @ posix.chmod  chmod-error !
 
-        0 <>
+            chmod-error @ -1 <>
+            posix.errno posix.EINTR <>
+            ||
+        until
+
+        chmod-error @ -1 =
         if
             file-fd @ file.close
-
-            path @ "Unable to set file permissions on {}." string.format throw
+            path @ posix.strerror "Unable to set file permissions on {}: {}." string.format throw
         then
     then
 
-    file-id @
+    file-fd @
 ;
 
 
 
 ( Open an existing file for access.  Pass one of file.r/o, file.w/o, or file.r/w as the mode. )
 : file.open  ( path mode -- file-id )
-    posix.O_CREAT file.call-posix-open
+    posix.O_TRUNC file.call-posix-open
 ;
 
 
 
 ( Create a new file for access.  Pass one of file.r/o, file.w/o, or file.r/w as the mode. )
 : file.create  ( path mode -- file-id )
-    posix.O_TRUNC file.call-posix-open
+    posix.O_CREAT file.call-posix-open
 ;
 
 
@@ -123,7 +186,7 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
     -1 variable! result
 
     ( Clear the last error, if any. )
-    0 posix.set-errno
+    posix.EINTR posix.set-errno
 
     ( Attempt to close the file, keeping in mind we may be interrupted by a signal. )
     begin
@@ -189,7 +252,10 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 
     ( Create a new buffer to hold the read data and fill it from the file, returning the new )
     ( buffer to the caller. )
-    byte-count @ buffer.new dup file-fd @ posix.read-buffer
+    byte-count @ buffer.new dup file-fd @ posix.read-buffer -1 =
+    if
+        file-fd @ posix.strerror "Unable to read from fd {}: {}." string.format throw
+    then
 ;
 
 
@@ -255,11 +321,11 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 
 ( Write a value as text, or a byte-buffer as binary. )
 : file.!  ( value file-id -- )
-    variable! file-id
+    variable! file-fd
     variable! value
 
     ( If the value isn't a buffer, convert it to a string and write it to one. )
-    value @ buffer? '
+    value @ value.is-buffer? '
     if
         ( Make sure that value is a string, and create a new buffer to hold it. )
         value @ value.to-string
@@ -270,10 +336,11 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
         ( string size ) value @ swap buffer.string!
     then
 
-    ( Now that value is a byte-buffer, write it to the file. )
-    buffer @ file-fd @ posix.write-buffer -1 =
-    If
-        file-fd @ posix.errno "Unable to write to fd {}, error code {}." string.format throw
+    ( Now that value is a byte-buffer, write it to the file.  Keeping in mind that we may be )
+    ( interrupted by a signal. )
+    value @ file-fd @ posix.write-buffer  -1  =
+    if
+        file-fd @ posix.strerror "Unable to write to fd {}: {}." string.format throw
     then
 ;
 
