@@ -198,14 +198,16 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
     variable! file-fd
     variable! char-count
 
+    ( Read the requested number of characters from the file, returning a byte-buffer. )
     char-count @ file-fd @ file.@ variable! buffer
 
+    ( Check to see if we've reached the end of the file. )
     buffer @ buffer.position@ char-count @ <>
     if
         "End of file reached." throw
     then
 
-    ( Move back to the beginning of the buffer, and extract the new string. )
+    ( Move the cursor back to the beginning of the buffer, and extract the new string. )
     0 buffer @ buffer.position!
     char-count @ buffer @ buffer.string@
 ;
@@ -214,6 +216,7 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 
 ( Read a single character from the file.  The read will fail if we're at the end of the file. )
 : file.char@  ( file-id -- char )
+    ( Swap the parameters to call with, 1 file-id file.string@ )
     1 swap file.string@
 ;
 
@@ -223,21 +226,26 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 ( terminate if the end of the file is reached. So, it's entirely possible to return an empty )
 ( string. )
 : file.line@ ( file-id -- string )
-    dup variable! file-fd
-    file.size@ variable! size
+    variable! file-fd  ( Get the file descriptor from the caller. )
 
+    ( Create new buffers to hold the read data. )
     "" variable! line
     "" variable! next-char
 
     begin
+        ( Keep going until we've hit a \n character or the end of the file. )
         next-char @ "\n" <>
         file-fd @ file.is-eof? '
         &&
     while
+        ( Append the current character to the gathered line. )
         next-char @ line @ +  line !
+
+        ( Read the next character for the next iteration. )
         file-fd @ file.char@  next-char !
     repeat
 
+    ( Return the gathered line. )
     line @
 ;
 
@@ -251,9 +259,12 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
     ( If the value isn't a buffer, convert it to a string and write it to one. )
     value @ buffer? '
     if
+        ( Make sure that value is a string, and create a new buffer to hold it. )
         value @ value.to-string
         dup string.size@ dup buffer.new value !
 
+        ( Write the string to the buffer. )
+        ( Note, buffer.string! expects it's parameters to be passed as string buffer size. )
         ( string size ) value @ swap buffer.string!
     then
 
@@ -270,11 +281,15 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 : file.line!  ( value file-id -- )
     variable! value
 
+    ( Is the value already a buffer? )
     value @ value.is-buffer?
     if
+        ( Just write it, and then write a \n separately. )
         value @ file.!
         "\n" file.!
     else
+        ( Make sure that the value is a string with the \n character appended.  Then write it to )
+        ( the file. )
         value @ value.to-string "\n" + file.!
     then
 ;
