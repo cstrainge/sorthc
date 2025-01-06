@@ -461,7 +461,7 @@ namespace sorth::compilation
 
                                 // Truncate the value to 32-bits.
                                 auto large = builder.CreateLoad(int64_type, temp_value);
-                                auto truncated_value = builder.CreateTrunc(result, int32_type);
+                                auto truncated_value = builder.CreateTrunc(large, int32_type);
 
                                 // Store the value in the output variable.
                                 builder.CreateStore(truncated_value, variable);
@@ -504,7 +504,7 @@ namespace sorth::compilation
 
                                 // Truncate the value to 32-bits.
                                 auto large = builder.CreateLoad(int64_type, temp_value);
-                                auto truncated_value = builder.CreateTrunc(result, int32_type);
+                                auto truncated_value = builder.CreateTrunc(large, int32_type);
 
                                 // Store the value in the output variable.
                                 builder.CreateStore(truncated_value, variable);
@@ -1579,6 +1579,9 @@ namespace sorth::compilation
                             info.variable_index = builder.CreateAlloca(int64_type);
                             info.block_index = var_index;
 
+                            builder.CreateCall(runtime_api.initialize_variable,
+                                               { info.variable });
+
                             ++var_index;
 
                             variable_map[instruction.get_value().get_string()] = info;
@@ -1591,18 +1594,22 @@ namespace sorth::compilation
                             llvm::Constant* zero_init =
                                     llvm::ConstantAggregateZero::get(runtime_api.value_struct_type);
 
-                            global_constant_map[instruction.get_value().get_string()] =
-                                         new llvm::GlobalVariable(*module,
+                            auto constant = new llvm::GlobalVariable(*module,
                                                                   runtime_api.value_struct_type,
                                                                   false,
                                                                   llvm::GlobalValue::PrivateLinkage,
                                                                   zero_init);
+
+                            global_constant_map[instruction.get_value().get_string()] = constant;
+                            builder.CreateCall(runtime_api.initialize_variable, { constant });
                         }
                         else
                         {
-                            constant_map[instruction.get_value().get_string()] =
+                            auto const_variable =
                                                 builder.CreateAlloca(runtime_api.value_struct_type);
 
+                            constant_map[instruction.get_value().get_string()] = const_variable;
+                            builder.CreateCall(runtime_api.initialize_variable, { const_variable });
                         }
                         break;
 
@@ -1765,14 +1772,8 @@ namespace sorth::compilation
                 switch (instruction.get_id())
                 {
                     case byte_code::Instruction::Id::def_variable:
-                        {
-                            auto& variable_info
-                                               = variable_map[instruction.get_value().get_string()];
-
-                            builder.CreateCall(runtime_api.initialize_variable,
-                                               { variable_info.variable });
-
-                        }
+                        // Nothing to do here...  The variable has already been allocated and
+                        // initialized to a default state.
                         break;
 
                     case byte_code::Instruction::Id::def_constant:
@@ -1785,12 +1786,10 @@ namespace sorth::compilation
                             if (iterator != constant_map.end())
                             {
                                 constant = iterator->second;
-                                builder.CreateCall(runtime_api.initialize_variable, { constant });
                             }
                             else
                             {
                                 constant = global_constant_map[name];
-                                builder.CreateCall(runtime_api.initialize_variable, { constant });
                             }
 
                             // Pop the value for the new constant off of the stack.
