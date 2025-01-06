@@ -98,6 +98,8 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
             path @ "Unable to set file permissions on {}." string.format throw
         then
     then
+
+    file-id @
 ;
 
 
@@ -116,7 +118,7 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 
 
 ( Close an open file. )
-: file.close ( file-id -- )
+: file.close  ( file-id -- )
     variable! file-fd
     -1 variable! result
 
@@ -225,7 +227,7 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 ( Attempt to read a line of text from the file, terminated by a \n character.  The read will also )
 ( terminate if the end of the file is reached. So, it's entirely possible to return an empty )
 ( string. )
-: file.line@ ( file-id -- string )
+: file.line@  ( file-id -- string )
     variable! file-fd  ( Get the file descriptor from the caller. )
 
     ( Create new buffers to hold the read data. )
