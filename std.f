@@ -59,6 +59,11 @@
 
 
 
+( Useful math words. )
+[include] std/math.f
+
+
+
 ( Hack for compiling scripts. )
 
 
