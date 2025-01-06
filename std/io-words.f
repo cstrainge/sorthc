@@ -46,17 +46,21 @@
 
 
 ( File system permission flags. )
-0o400 constant posix.S_IRUSR
-0o200 constant posix.S_IWUSR
-0o100 constant posix.S_IXUSR
+0o4000 constant posix.S_ISUID
+0o2000 constant posix.S_ISGID
+0o1000 constant posix.S_ISVTX
 
-0o040 constant posix.S_IRGRP
-0o020 constant posix.S_IWGRP
-0o010 constant posix.S_IXGRP
+0o0400 constant posix.S_IRUSR
+0o0200 constant posix.S_IWUSR
+0o0100 constant posix.S_IXUSR
 
-0o004 constant posix.S_IROTH
-0o002 constant posix.S_IWOTH
-0o001 constant posix.S_IXOTH
+0o0040 constant posix.S_IRGRP
+0o0020 constant posix.S_IWGRP
+0o0010 constant posix.S_IXGRP
+
+0o0004 constant posix.S_IROTH
+0o0002 constant posix.S_IWOTH
+0o0001 constant posix.S_IXOTH
 
 
 
@@ -92,7 +96,9 @@
 
 ( posix.write-buffer is implemented in the run-time library. )
 
-ffi.fn fchmod as posix.chmod ffi.i32 ffi.u32 -> ffi.i32
+ffi.fn chmod as posix.chmod ffi.string ffi.u32 -> ffi.i32
+
+ffi.fn fchmod as posix.fchmod ffi.i32 ffi.u32 -> ffi.i32
 
 ffi.fn close as posix.close ffi.i32 -> ffi.i32
 
@@ -124,7 +130,7 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
     0 posix.set-errno
 
     ( Check to see if the file already exists. )
-    path @ file.exists? variable! is-new?
+    path @ file.exists? variable! is-existing?
 
     ( Attempt to open the file, keeping in mind we may be interrupted by a signal. )
     begin
@@ -141,14 +147,11 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
         path @ posix.strerror "Unable to open file {}: {}." string.format throw
     then
 
-    ( Clear the last error, if any. )
-    0 posix.set-errno
-
     ( If the file didn't exist before, set some reasonable file permissions. )
-    is-new? @
+    is-existing? @ '
     if
         begin
-            file-fd @ file-permissions @ posix.chmod  chmod-error !
+            file-fd @ file-permissions @ posix.fchmod  chmod-error !
 
             chmod-error @ -1 <>
             posix.errno posix.EINTR <>
