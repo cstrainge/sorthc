@@ -1259,6 +1259,14 @@ namespace sorth::compilation
             // Now generate the FFI words for this script.
             for (const auto& function : script->get_ffi_functions())
             {
+                // Check to see if we've already registered this function.
+                auto iterator = collection.word_map.find(function.alias);
+
+                if (iterator != collection.word_map.end())
+                {
+                    continue;
+                }
+
                 // Gather the information for the external function reference.
                 FfiFunctionInfo function_info;
 
