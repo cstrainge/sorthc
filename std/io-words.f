@@ -77,7 +77,7 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
         posix.errno posix.EINTR =
         &&
     while
-        path@ mode extra-flags posix.open file-fd !
+        path @ mode extra-flags posix.open file-fd !
     repeat
 
     ( Were we able to open the file? )
