@@ -351,6 +351,7 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 
 ( Write a string to the file appending a new \n character at the end of the write. )
 : file.line!  ( value file-id -- )
+    variable! file-fd
     variable! value
 
     ( Is the value already a buffer? )
@@ -362,6 +363,6 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
     else
         ( Make sure that the value is a string with the \n character appended.  Then write it to )
         ( the file. )
-        value @ value.to-string "\n" + file.!
+        value @ value.to-string "\n" + file-fd @ file.!
     then
 ;
