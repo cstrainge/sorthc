@@ -71,7 +71,7 @@ namespace sorth::run_time::data_structures
 
         public:
             ByteBuffer(size_t size);
-            ByteBuffer(void* raw_ptr, size_t size);
+            ByteBuffer(void* raw_ptr, size_t size, bool owned = false);
             ByteBuffer(const ByteBuffer& buffer);
             ByteBuffer(ByteBuffer&& buffer);
             virtual ~ByteBuffer() override;
@@ -103,6 +103,9 @@ namespace sorth::run_time::data_structures
 
             virtual void write_string(const std::string& string, size_t max_size) override;
             virtual std::string read_string(size_t max_size) override;
+
+        public:
+            virtual Value deep_copy() const noexcept override;
 
         private:
             void reset();

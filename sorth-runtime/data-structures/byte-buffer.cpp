@@ -108,8 +108,8 @@ namespace sorth::run_time::data_structures
     }
 
 
-    ByteBuffer::ByteBuffer(void* raw_ptr, size_t size)
-    : owned(false),
+    ByteBuffer::ByteBuffer(void* raw_ptr, size_t size, bool owned)
+    : owned(owned),
       bytes(reinterpret_cast<unsigned char*>(raw_ptr)),
       byte_size(size),
       current_position(0)
@@ -374,6 +374,15 @@ namespace sorth::run_time::data_structures
         }
 
         return new_string;
+    }
+
+
+    Value ByteBuffer::deep_copy() const noexcept
+    {
+        auto new_buffer = new unsigned char[byte_size];
+        memcpy(new_buffer, bytes, byte_size);
+
+        return std::make_shared<ByteBuffer>(new_buffer, byte_size, true);
     }
 
 
