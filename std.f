@@ -34,6 +34,11 @@
 
 
 
+( The foreign function interface. )
+[include] std/ffi.f
+
+
+
 ( Include some words for accessing the terminal. )
 [include] std/terminal.f
 
@@ -54,8 +59,8 @@
 
 
 
-( The foreign function interface. )
-[include] std/ffi.f
+( Include some words for accessing the file system. )
+[include] std/io-words.f
 
 
 
