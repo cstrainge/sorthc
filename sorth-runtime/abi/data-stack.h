@@ -37,7 +37,10 @@ extern "C"
     int8_t stack_pop_double(double* value);
 
 
-    // int8_t stack_pop_string(char** value);
+    int8_t stack_pop_string(char** value);
+
+
+    void stack_free_string(char* value);
 
 
 }

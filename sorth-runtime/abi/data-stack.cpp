@@ -136,4 +136,34 @@ extern "C"
     }
 
 
+    int8_t stack_pop_string(char** value)
+    {
+        if (data_stack.empty())
+        {
+            return 1;
+        }
+
+        auto new_value = data_stack.back();
+        data_stack.pop_back();
+
+        if (!new_value.is_string())
+        {
+            return 1;
+        }
+
+        const auto& string_value = new_value.get_string();
+
+        *value = new char[string_value.size() + 1];
+        std::strcpy(*value, string_value.c_str());
+
+        return 0;
+    }
+
+
+    void stack_free_string(char* value)
+    {
+        delete [] value;
+    }
+
+
 }
