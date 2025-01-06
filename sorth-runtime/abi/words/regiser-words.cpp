@@ -10,6 +10,7 @@
 #include "structure-words.h"
 #include "terminal-words.h"
 #include "value-type-words.h"
+#include "posix-words.h"
 
 
 
@@ -53,6 +54,7 @@ namespace sorth::run_time::abi::words
         register_structure_words(registrar);
         register_terminal_words(registrar);
         register_value_type_words(registrar);
+        register_posix_words(registrar);
 
         registrar("sorth.args", "word_get_arguments");
     }
