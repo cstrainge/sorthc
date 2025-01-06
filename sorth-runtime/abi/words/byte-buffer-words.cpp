@@ -34,11 +34,13 @@ namespace
 
     uint8_t check_buffer_index(size_t byte_size, const ByteBufferPtr& buffer)
     {
-        if (buffer->position() + byte_size >= buffer->size())
+        if (buffer->position() + byte_size > buffer->size())
         {
             std::stringstream stream;
 
-            stream << "Index " << buffer->position() << " out of bounds for buffer size "
+            stream << "Index " << buffer->position()
+                   << " with access size " << byte_size
+                   << " is out of bounds for buffer size "
                    << buffer->size() << ".";
 
             set_last_error(stream.str().c_str());
