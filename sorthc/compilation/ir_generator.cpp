@@ -2319,8 +2319,9 @@ namespace sorth::compilation
             std::vector<llvm::AllocaInst*> parameter_variables;
             parameter_variables.reserve(word.ffi_info->parameters.size());
 
-            // Allocate variables for all of the function parameters.
-            for (size_t i = 0; i < word.ffi_info->parameters.size(); ++i)
+            // Allocate variables and pop the valuefor all of the function parameters.  But don't
+            // forget, we've popping in reverse order.
+            for (ssize_t i = word.ffi_info->parameters.size() - 1; i >= 0; --i)
             {
                 const auto& parameter = word.ffi_info->parameters[i];
 
@@ -2341,7 +2342,7 @@ namespace sorth::compilation
 
             parameter_values.reserve(word.ffi_info->parameters.size());
 
-            for (size_t i = 0; i < word.ffi_info->parameters.size(); ++i)
+            for (ssize_t i = word.ffi_info->parameters.size() - 1; i >= 0; --i)
             {
                 auto loaded_variable = builder.CreateLoad(word.ffi_info->parameters[i].type.type,
                                                           parameter_variables[i]);
