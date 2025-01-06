@@ -65,7 +65,8 @@ extern "C"
 
         if (!message_value.is_string())
         {
-            set_last_error("Expected a string value for the exception message.");
+            set_last_error("Word throw expected a string value for the exception message.");
+
             return 1;
         }
 
