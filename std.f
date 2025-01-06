@@ -60,7 +60,7 @@
 
 
 ( Include some words for accessing the file system. )
-[include] std/io-words.f
+[include] std/io-posix.f
 
 
 
