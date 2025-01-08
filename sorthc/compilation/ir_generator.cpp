@@ -27,41 +27,51 @@ namespace sorth::compilation
 
         // LLVM IR has rules for what characters are allowed in a symbol name.  This function will
         // filter out any characters that are not allowed.
+        std::string filter_ir_symbol_name(const std::string& name)
+        {
+            std::stringstream stream;
+
+            for (auto c : name)
+            {
+                for (auto c : name)
+                {
+                    switch (c)
+                    {
+                        case '@':   stream << "_at";            break;
+                        case '\'':  stream << "_prime";         break;
+                        case '"':   stream << "_quote";         break;
+                        case '%':   stream << "_percent";       break;
+                        case '!':   stream << "_bang";          break;
+                        case '?':   stream << "_question";      break;
+                        case '=':   stream << "_equal";         break;
+                        case '<':   stream << "_less";          break;
+                        case '>':   stream << "_greater";       break;
+                        case '+':   stream << "_plus";          break;
+                        case '[':   stream << "_left_square";   break;
+                        case ']':   stream << "_right_square";  break;
+
+                        default:    stream << c;                break;
+                    }
+                }
+            }
+
+            return stream.str();
+        }
+
+
+        // We'll add unique naming and an index to ensure that duplicate names don't interfere with
+        // each other.  It's valid to have multiple words with the same name in Forth.
         //
-        // Additionally, we'll add unique naming and an index to ensure that duplicate names don't
-        // interfere with each other.  It's valid to have multiple words with the same name in
-        // Forth.
-        std::string filter_word_name(const std::string& name)
+        // Also, we'll filter any characters that are not allowed in an IR symbol name.
+        std::string generate_ir_word_name(const std::string& name)
         {
             static std::atomic<int64_t> index = 0;
 
             std::stringstream stream;
             auto current = index.fetch_add(1, std::memory_order_relaxed);
 
-            stream << "_word_fn_";
-
-            for (auto c : name)
-            {
-                switch (c)
-                {
-                    case '@':   stream << "_at";            break;
-                    case '\'':  stream << "_prime";         break;
-                    case '"':   stream << "_quote";         break;
-                    case '%':   stream << "_percent";       break;
-                    case '!':   stream << "_bang";          break;
-                    case '?':   stream << "_question";      break;
-                    case '=':   stream << "_equal";         break;
-                    case '<':   stream << "_less";          break;
-                    case '>':   stream << "_greater";       break;
-                    case '+':   stream << "_plus";          break;
-                    case '[':   stream << "_left_square";   break;
-                    case ']':   stream << "_right_square";  break;
-
-                    default:    stream << c;            break;
-                }
-            }
-
-            stream << "_"
+            stream << "_word_fn_"
+                   << "_" << filter_ir_symbol_name(name)
                    << std::setw(6) << std::setfill('0') << current
                    << "_";
 
@@ -711,7 +721,7 @@ namespace sorth::compilation
                 WordInfo info;
 
                 info.name = name;
-                info.handler_name = filter_word_name(name);
+                info.handler_name = generate_ir_word_name(name);
                 info.code = word.get_code();
                 info.was_referenced = false;
                 info.function = nullptr;
@@ -1088,7 +1098,7 @@ namespace sorth::compilation
                 // an instance of the structure is created.  We mark these words as referenced
                 // because they are always registered with the run-time by the script init code.
                 init_word_info.name = structure.get_name() + ".raw-init";
-                init_word_info.handler_name = filter_word_name(init_word_info.name);
+                init_word_info.handler_name = generate_ir_word_name(init_word_info.name);
                 init_word_info.was_referenced = true;
 
                 init_word_info.code = structure.get_initializer();
@@ -1204,6 +1214,117 @@ namespace sorth::compilation
         }
 
 
+        llvm::CallInst* create_structure_pop_ir(llvm::IRBuilder<>& builder,
+                                                const RuntimeApi& runtime,
+                                                llvm::Value* variable,
+                                                WordCollection& collection,
+                                                llvm::StructType* struct_type,
+                                                const byte_code::StructureType& structure)
+        {
+            // Keep track of the structure push functions.  We only want to create one per structure
+            // type.  If multiple FFI functions need access to this structure then they can share
+            // the same push function.
+            static std::unordered_map<std::string, llvm::Function*> struct_pop_functions;
+
+            llvm::Function* pop_function = nullptr;
+
+            auto iterator = struct_pop_functions.find(structure.get_name());
+
+            if (iterator == struct_pop_functions.end())
+            {
+                // Generate the function and the IR code to pop the structure from the stack.
+
+                // Start off by creating the function signature and the function declaration.
+                auto int1_type = llvm::Type::getInt1Ty(builder.getContext());
+                auto structure_ptr_type = llvm::PointerType::get(struct_type, 0);
+                auto pop_function_signature = llvm::FunctionType::get(int1_type,
+                                                                      { structure_ptr_type },
+                                                                      false);
+                pop_function = llvm::Function::Create(pop_function_signature,
+                                                      llvm::Function::ExternalLinkage,
+                                                      filter_ir_symbol_name(structure.get_name())
+                                                          + "_pop_handler",
+                                                      builder.GetInsertBlock()->getModule());
+
+                // Save this function reference in our collection.
+                struct_pop_functions[structure.get_name()] = pop_function;
+
+                // Make sure to save the current insert point so that we don't mess up the caller.
+                auto current_insert_point = builder.GetInsertPoint();
+
+                // Create the function body.
+                auto entry_block = llvm::BasicBlock::Create(builder.getContext(),
+                                                            "entry",
+                                                            pop_function);
+                builder.SetInsertPoint(entry_block);
+
+                // Return from the function...
+                builder.CreateRet(llvm::ConstantInt::get(int1_type, 1));
+
+                // Restore the insert point for the caller.
+                builder.SetInsertPoint(current_insert_point);
+            }
+
+            // Create a call to our pop function.
+            return builder.CreateCall(pop_function, { variable });
+        }
+
+
+        void create_structure_push_ir(llvm::IRBuilder<>& builder,
+                                      const RuntimeApi& runtime,
+                                      llvm::Value* variable,
+                                      WordCollection& collection,
+                                      llvm::StructType* struct_type,
+                                      const byte_code::StructureType& structure)
+        {
+            // Keep track of the structure pop functions.  We only want to create one per structure
+            // type.  If multiple FFI functions need access to this structure then they can share
+            // the same pop function.
+            static std::unordered_map<std::string, llvm::Function*> struct_push_functions;
+            llvm::Function* push_function = nullptr;
+
+            auto iterator = struct_push_functions.find(structure.get_name());
+
+            if (iterator == struct_push_functions.end())
+            {
+                // Generate the function and the IR code to push the structure onto the stack.
+
+                // Start off by creating the function signature and the function declaration.
+                auto void_type = llvm::Type::getVoidTy(builder.getContext());
+                auto structure_ptr_type = llvm::PointerType::get(struct_type, 0);
+                auto push_function_signature = llvm::FunctionType::get(void_type,
+                                                                      { structure_ptr_type },
+                                                                      false);
+                push_function = llvm::Function::Create(push_function_signature,
+                                                       llvm::Function::ExternalLinkage,
+                                                       filter_ir_symbol_name(structure.get_name())
+                                                           + "_push_handler",
+                                                       builder.GetInsertBlock()->getModule());
+
+                // Save this function reference in our collection.
+                struct_push_functions[structure.get_name()] = push_function;
+
+                // Make sure to save the current insert point so that we don't mess up the caller.
+                auto current_insert_point = builder.GetInsertPoint();
+
+                // Create the function body.
+                auto entry_block = llvm::BasicBlock::Create(builder.getContext(),
+                                                            "entry",
+                                                            push_function);
+                builder.SetInsertPoint(entry_block);
+
+                // Return from the function...
+                builder.CreateRetVoid();
+
+                // Restore the insert point for the caller.
+                builder.SetInsertPoint(current_insert_point);
+            }
+
+            // Create a call to our push function.
+            builder.CreateCall(push_function, { variable });
+        }
+
+
         void register_ffi_structures(const byte_code::ScriptPtr& script, WordCollection& collection)
         {
             // First register the structures in the sub-scripts.
@@ -1239,8 +1360,72 @@ namespace sorth::compilation
                     auto struct_type = llvm::StructType::create(raw_types, structure.get_name());
 
                     // Register the new type.
-                    // TODO: Create the push/pop/free functions for the structure type.
-                    // collection.ffi_types[structure.get_name()] = struct_type;
+                    collection.ffi_types[structure.get_name()] =
+                        {
+                            .type = struct_type,
+
+                            .pop_value = [&collection,
+                                           &structure,
+                                           struct_type,
+                                           ffi_info](llvm::IRBuilder<>& builder,
+                                                     const RuntimeApi& runtime,
+                                                     llvm::Value* variable)
+                                {
+                                    // Generate the code to translate from the Forth structure to
+                                    // the native structure.
+                                    return create_structure_pop_ir(builder,
+                                                                   runtime,
+                                                                   variable,
+                                                                   collection,
+                                                                   struct_type,
+                                                                   structure);
+                                },
+
+                            .free_value = [&collection,
+                                           &structure,
+                                           struct_type,
+                                           ffi_info](llvm::IRBuilder<>& builder,
+                                                     const RuntimeApi& runtime,
+                                                     llvm::Value* variable)
+                                {
+                                    for (size_t i = 0; i < structure.get_field_names().size(); ++i)
+                                    {
+                                        // Get the underlying type information for the field.
+                                        const auto& field_type = ffi_info.field_types[i];
+                                        const auto& type_info =
+                                          collection.find_type(field_type,
+                                                               "structure " + structure.get_name());
+
+                                        // Get a pointer to the field in the raw structure.  If the
+                                        // free is never generated then the GEP will be tossed by
+                                        // the optimizer.
+                                        auto field_ptr = builder.CreateStructGEP(struct_type,
+                                                                                 variable,
+                                                                                 i);
+
+                                        // Call the free code generator for the field type.
+                                        type_info.free_value(builder, runtime, field_ptr);
+                                    }
+                                },
+
+                            .push_value = [&collection,
+                                           &structure,
+                                           struct_type,
+                                           ffi_info](llvm::IRBuilder<>& builder,
+                                                     const RuntimeApi& runtime,
+                                                     llvm::Value* variable)
+                                {
+                                    // Generate code to extract the fields from the native structure
+                                    // and populate a Forth structure and push it's value onto the
+                                    // stack.
+                                    create_structure_push_ir(builder,
+                                                             runtime,
+                                                             variable,
+                                                             collection,
+                                                             struct_type,
+                                                             structure);
+                                }
+                        };
                 }
             }
         }
@@ -1301,14 +1486,14 @@ namespace sorth::compilation
                                                                     function.name,
                                                                     module.get());
 
-                // Register the function with the collection.
+                // Set the function's declaration information.
                 function_info.function = function_declaration;
 
-                // Now register the wrapper word for the external function reference.
+                // Now register the wrapper word for the external word reference.
                 WordInfo word_info;
 
                 word_info.name = function.alias;
-                word_info.handler_name = filter_word_name(function.alias);
+                word_info.handler_name = generate_ir_word_name(function.alias);
                 word_info.was_referenced = false;
                 word_info.ffi_info = std::move(function_info);
                 word_info.function = nullptr;
