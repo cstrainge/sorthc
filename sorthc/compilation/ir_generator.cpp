@@ -142,6 +142,12 @@ namespace sorth::compilation
         };
 
 
+        llvm::Value* define_string_constant(const std::string& text,
+                                            llvm::IRBuilder<>& builder,
+                                            std::shared_ptr<llvm::Module>& module,
+                                            llvm::LLVMContext& context);
+
+
         void call_debug_print(const std::string& text,
                               llvm::IRBuilder<>& builder,
                               std::shared_ptr<llvm::Module>& module,
@@ -917,13 +923,23 @@ namespace sorth::compilation
             // Add a completed word info to the collection.
             void add_word(WordInfo&& word_info)
             {
-                auto name = word_info.name;
+                // Some words are referenced by the compiler itself, so we'll mark them as as such.
+                static std::unordered_set<std::string> compiler_used_words =
+                    {
+                        "#@", "#!", "value.is-structure?", "#.is-of-type?"
+                    };
 
-                if (name == "#!")
+                // Is this one of the compiler used words?
+                auto name = word_info.name;
+                auto iterator = compiler_used_words.find(name);
+
+                if (iterator != compiler_used_words.end())
                 {
+                    // Yes, yes it is.
                     word_info.was_referenced = true;
                 }
 
+                // Regardless, add the word to our collection.
                 words.emplace_back(word_info);
                 word_map[name] = words.size() - 1;
             }
@@ -1607,6 +1623,33 @@ namespace sorth::compilation
                                          llvm::StructType* struct_type,
                                          llvm::Function* function)
         {
+            auto generate_block = [&builder, &function]()
+                {
+                    static size_t next_block_index = 0;
+                    std::string name = "block_" + std::to_string(next_block_index);
+
+                    auto block = llvm::BasicBlock::Create(builder.getContext(), name, function);
+                    ++next_block_index;
+
+                    return block;
+                };
+
+            auto get_word_function = [&collection, &structure](const std::string& name)
+                {
+                    auto iterator = collection.word_map.find(name);
+
+                    if (iterator == collection.word_map.end())
+                    {
+                        throw_error("Internal error, unknown word " + name +
+                                    " referenced in structure " + structure.get_name() + " pop.");
+                    }
+
+                    auto index = iterator->second;
+                    auto& word = collection.words[index];
+
+                    return word.function;
+                };
+
             // We're going to use the structure's new word to create it so make sure that it's
             // marked as referenced.
             auto struct_new_word_index = collection.word_map[structure.get_name() + ".new"];
@@ -1623,21 +1666,132 @@ namespace sorth::compilation
                                                         "entry",
                                                         function);
 
+            // Create the error block.
+            auto error_block = llvm::BasicBlock::Create(builder.getContext(),
+                                                        "error",
+                                                        function);
+
             // Create the final exit block.
             auto exit_block = llvm::BasicBlock::Create(builder.getContext(),
                                                        "exit",
                                                        function);
 
+            // The main entry point for the function, first we'll allocate an error flag and clear
+            // it.
             builder.SetInsertPoint(entry_block);
-
             auto return_variable = builder.CreateAlloca(bool_type, nullptr, "return_variable");
             builder.CreateStore(builder.getInt1(0), return_variable);
+
+            // Allocate and initialize a variable to hold the structure.
+            auto structure_variable = builder.CreateAlloca(runtime.value_struct_type,
+                                                           nullptr,
+                                                           "structure_variable");
+            builder.CreateCall(runtime.initialize_variable, { structure_variable });
+
+            // Create the error block that sets the error flag and jumps to the exit block.
+            builder.SetInsertPoint(error_block);
+            builder.CreateStore(builder.getInt1(1), return_variable);
             builder.CreateBr(exit_block);
 
-
+            // Create the exit block that does any required cleanup and returns the error flag.
             builder.SetInsertPoint(exit_block);
+            builder.CreateCall(runtime.free_variable, { structure_variable });
             auto return_value = builder.CreateLoad(bool_type, return_variable);
             builder.CreateRet(return_value);
+
+            // Back to filling out the entry block.  First we'll pop the structure from the stack
+            // and make sure that the pop was successful.
+            builder.SetInsertPoint(entry_block);
+
+            auto next_block = generate_block();
+            auto pop_result = builder.CreateCall(runtime.stack_pop, { structure_variable });
+            auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            // Now, is the value we popped a structure?
+            auto is_structure = get_word_function("value.is-structure?");
+
+            builder.CreateCall(runtime.stack_push, { structure_variable });
+            auto is_structure_result = builder.CreateCall(is_structure, { });
+            next_block = generate_block();
+            cmp = builder.CreateICmpNE(is_structure_result, builder.getInt1(0));
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            // Check to see what if the structure check was successful...
+            auto is_structure_value = builder.CreateAlloca(bool_type, nullptr, "is_structure");
+            pop_result = builder.CreateCall(runtime.stack_pop_bool, { is_structure_value });
+            cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            auto loaded = builder.CreateLoad(bool_type, is_structure_value);
+            cmp = builder.CreateICmpEQ(loaded, builder.getInt1(1));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, next_block, error_block);
+            builder.SetInsertPoint(next_block);
+
+            // If we got here, it's a structure, now to see if it's the right structure?
+            auto is_structure_of_type = get_word_function("#.is-of-type?");
+
+            auto struct_name = define_string_constant(structure.get_name(),
+                                                      builder,
+                                                      module,
+                                                      builder.getContext());
+            builder.CreateCall(runtime.stack_push_string, { struct_name });
+            builder.CreateCall(runtime.stack_push, { structure_variable });
+            auto is_type_result = builder.CreateCall(is_structure_of_type, { });
+            next_block = generate_block();
+            cmp = builder.CreateICmpNE(is_type_result, builder.getInt1(0));
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            // Now we pop the result from the stack and check it.
+            pop_result = builder.CreateCall(runtime.stack_pop_bool, { is_structure_value });
+            cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            loaded = builder.CreateLoad(bool_type, is_structure_value);
+            cmp = builder.CreateICmpEQ(loaded, builder.getInt1(1));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, next_block, error_block);
+            builder.SetInsertPoint(next_block);
+
+            // Ok, it's a structure and it's our structure.  We can proceed to read the fields and
+            // populate the raw structure.
+            auto structure_read = get_word_function("#@");
+            const auto& ffi_info = structure.get_ffi_info().value();
+
+            for (size_t i = 0; i < ffi_info.field_types.size(); ++i)
+            {
+                // Read the value from the structure onto the stack.
+                builder.CreateCall(runtime.stack_push_int, { builder.getInt64(i) });
+                builder.CreateCall(runtime.stack_push, { structure_variable });
+                auto read_result = builder.CreateCall(structure_read, { });
+                cmp = builder.CreateICmpNE(read_result, builder.getInt1(0));
+                next_block = generate_block();
+                builder.CreateCondBr(cmp, error_block, next_block);
+                builder.SetInsertPoint(next_block);
+
+                // Get a pointer to the field in the raw structure.
+                auto field_ref = builder.CreateStructGEP(struct_type, raw_structure, i);
+
+                // Now call the type generator to pop the value from the stack and convert it to the
+                // native type.
+                const auto& field_type = collection.ffi_types[ffi_info.field_types[i]];
+
+                auto pop_result = field_type.pop_value(builder, runtime, field_ref);
+                cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                next_block = generate_block();
+                builder.CreateCondBr(cmp, error_block, next_block);
+                builder.SetInsertPoint(next_block);
+            }
+
+            builder.CreateBr(exit_block);
         }
 
 
@@ -3308,7 +3462,8 @@ namespace sorth::compilation
         // Create the word_table for the runtime.
         create_word_table(words, module, context);
 
-//module->print(llvm::outs(), nullptr);
+        // Uncomment this line to see the generated LLVM IR before validation and optimization.
+        //module->print(llvm::outs(), nullptr);
 
         // Now that all code has been generated, verify that the module is well-formed.
         if (verifyModule(*module, &llvm::errs()))

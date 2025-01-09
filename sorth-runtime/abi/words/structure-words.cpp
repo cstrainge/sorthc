@@ -78,6 +78,33 @@ extern "C"
         }
 
 
+        uint8_t word_structure_is_of_type()
+        {
+            auto object = stack_pop_as_structure();
+            Value type_value;
+
+            auto pop_result = stack_pop(&type_value);
+
+            if (!object || pop_result)
+            {
+                return 1;
+            }
+
+            if (!type_value.is_string())
+            {
+                set_last_error("Expected a string value for structure type name.");
+
+                return 1;
+            }
+
+            std::string type_name = type_value.get_string();
+
+            stack_push_bool(object->definition->name == type_name);
+
+            return 0;
+        }
+
+
         uint8_t word_read_field()
         {
             auto object = stack_pop_as_structure();
@@ -211,6 +238,7 @@ namespace sorth::run_time::abi::words
     void register_structure_words(const RuntimeWordRegistrar& registrar)
     {
         registrar("#.create-named", "word_create_named_struct");
+        registrar("#.is-of-type?", "word_structure_is_of_type");
         registrar("#@", "word_read_field");
         registrar("#!", "word_write_field");
         registrar("#.iterate", "word_structure_iterate");
