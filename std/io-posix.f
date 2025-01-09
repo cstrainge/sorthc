@@ -75,6 +75,35 @@
 
 
 
+ffi.# posix.timespec
+    ffi.u32 tv_sec -> 0 ,
+    ffi.u64 tv_nsec -> 0
+;
+
+
+
+ffi.# posix.stat-struct
+    ffi.u64 st_dev -> 0 ,
+    ffi.u64 st_ino -> 0 ,
+    ffi.u64 st_nlink -> 0 ,
+    ffi.u32 st_mode -> 0 ,
+    ffi.u32 st_uid -> 0 ,
+    ffi.u32 st_gid -> 0 ,
+    ffi.u32 pad.0 -> 0 ,
+    ffi.u64 st_rdev -> 0 ,
+    ffi.i64 st_size -> 0 ,
+    ffi.i64 st_blksize -> 0 ,
+    ffi.i64 st_blocks -> 0 ,
+    posix.timespec st_atim -> posix.timespec.new ,
+    posix.timespec st_mtim -> posix.timespec.new ,
+    posix.timespec st_ctim -> posix.timespec.new ,
+    ffi.u64 glibc_reserved.1 -> 0 ,
+    ffi.u64 glibc_reserved.2 -> 0 ,
+    ffi.u64 glibc_reserved.3 -> 0
+;
+
+
+
 ( As of now, wrappers for a few of the posix functions are implemented in the runtime library. )
 ( Hopefully they'll be moved out at some point in the future as the FFI matures. )
 
@@ -103,6 +132,10 @@ ffi.fn fchmod as posix.fchmod ffi.i32 ffi.u32 -> ffi.i32
 ffi.fn close as posix.close ffi.i32 -> ffi.i32
 
 ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
+
+ffi.fn stat as posix.stat ffi.string posix.stat-struct:out.ptr -> ffi.i32
+
+ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
 
 
 
@@ -181,6 +214,16 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
 : file.create  ( path mode -- file-id )
     posix.O_CREAT file.call-posix-open
 ;
+
+
+
+( Connect to a server's existing socket. )
+: socket.connect  ( path -- file-id )
+    variable! path
+
+    "The word socket.connect is not yet implemented." throw
+;
+
 
 
 ( Close an open file. )
@@ -364,5 +407,58 @@ ffi.fn lseek as posix.lseek ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
         ( Make sure that the value is a string with the \n character appended.  Then write it to )
         ( the file. )
         value @ value.to-string "\n" + file-fd @ file.!
+    then
+;
+
+
+
+( Read a FD and get the size of the associated file. )
+: file.size@  ( file-id -- size )
+    variable! file
+
+    variable result
+    variable stat-info
+
+    ( Check which version of stat to call, we should have been passed either a file path or a file )
+    ( descriptor. )
+    file @ value.is-string?
+    if
+        file @ posix.stat result ! stat-info !
+    else
+        file @ value.is-number?
+        if
+            file @ posix.fstat result ! stat-info !
+        else
+            "Invalid file descriptor or path." throw
+        then
+    then
+
+    ( Was the call successful or did it fail? )
+    result @ -1 =
+    if
+        file @ posix.strerror "Unable to get file size for {}: {}." string.format throw
+    then
+
+    ( Return the size of the file. )
+    stat-info posix.stat-struct.st_size@@
+;
+
+
+
+( Check to see if a given file exists. )
+: file.exists?  ( path -- exists? )
+    variable! path
+
+    ( Call the stat function, but drop the structure result because we don't need it. )
+    path @ posix.stat swap drop
+
+    ( Was the call successful or did it fail? )
+    -1 =
+    if
+        ( No file. )
+        false
+    else
+        ( File exists. )
+        true
     then
 ;

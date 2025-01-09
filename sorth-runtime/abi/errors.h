@@ -22,6 +22,12 @@ extern "C"
     void clear_last_error();
 
 
+    void debug_print(const char* message);
+
+
+    void debug_print_bool(bool value);
+
+
 }
 
 

@@ -51,6 +51,18 @@ extern "C"
     }
 
 
+    void debug_print(const char* message)
+    {
+        std::cerr << message << std::endl;
+    }
+
+
+    void debug_print_bool(bool value)
+    {
+        std::cerr << (value ? "true" : "false") << std::endl;
+    }
+
+
 }
 
 

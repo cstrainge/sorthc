@@ -188,77 +188,6 @@ extern "C"
     }
 
 
-    uint8_t word_socket_connect()
-    {
-        return 1;
-    }
-
-
-    uint8_t word_file_size_read()
-    {
-        int64_t file_id;
-        struct stat stat_buffer;
-
-        // TODO: Check for path or fd.
-
-        auto pop_result = stack_pop_int(&file_id);
-
-        if (pop_result)
-        {
-            return 1;
-        }
-
-        if (!fstat(file_id, &stat_buffer))
-        {
-            switch (errno)
-            {
-                case EBADF:
-                    set_last_error(("Bad file descriptor " +
-                                    std::to_string(file_id) + ".").c_str());
-                    break;
-
-                case EIO:
-                    set_last_error("I/O error occurred.");
-                    break;
-
-                case EOVERFLOW:
-                    set_last_error("File information exceeds buffer limitations.");
-                    break;
-
-                default:
-                    set_last_error("Unexpected I/O error occurred.");
-                    break;
-            }
-
-            return 1;
-        }
-
-        stack_push_int(stat_buffer.st_size);
-
-        return 0;
-    }
-
-
-    uint8_t word_file_exists()
-    {
-        Value path_value;
-
-        auto pop_result = stack_pop(&path_value);
-
-        if (pop_result || !path_value.is_string())
-        {
-            return 1;
-        }
-
-        struct stat stat_buffer;
-
-        auto result = stat(path_value.get_string().c_str(), &stat_buffer);
-        stack_push_bool(result == 0);
-
-        return 0;
-    }
-
-
 }
 
 
@@ -275,10 +204,6 @@ namespace sorth::run_time::abi::words
         registrar("posix.fcntl", "word_posix_fcntl");
         registrar("posix.read-buffer", "word_posix_read_buffer");
         registrar("posix.write-buffer", "word_posix_write_buffer");
-
-        registrar("socket.connect", "word_socket_connect");
-        registrar("file.size@", "word_file_size_read");
-        registrar("file.exists?", "word_file_exists");
     }
 
 

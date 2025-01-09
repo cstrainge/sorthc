@@ -50,7 +50,7 @@
     word variable! struct-name
 
     ( The alignment of the structure. )
-    variable alignment
+    "8" variable! alignment
 
     ( Create new arrays to hold the field names and their types for the new structure. )
     0 [].new variable! fields
@@ -110,7 +110,7 @@
                     ";" "," 2 code.compile_until_words
 
                     "swap" op.execute
-                    index @ -- op.push_constant_value
+                    field-index @ -- op.push_constant_value
                     "swap" op.execute
                     "[]!" op.execute
 
@@ -123,19 +123,21 @@
                 endof
 
             ( Resize the field name and type arrays to hold the new field. )
-            index @ ++ fields [].size!!
-            index @ ++ field-types [].size!!
+            field-index @ ++ fields [].size!!
+            field-index @ ++ field-types [].size!!
 
             ( The next-word is the field type. )
-            next-word @ field-types [ index @ ]!!
+            next-word @ field-types [ field-index @ ]!!
 
             ( Get the field name. )
-            word field [ index @ ]!!
+            word fields [ field-index @ ]!!
+
+            field-index ++!
         endcase
     repeat
 
     ( Did we find any initialization code? )
-    found_initializers @
+    found-initializers @
     if
         ( We found initialization code, so pack it up and pass it to the C++ structure creation )
         ( code.  Pop it off of the construction stack and onto the data stack. )
@@ -174,10 +176,34 @@
     "ffi.bool" sentinel_word
 ;
 
+: ffi.bool:ptr immediate
+    "ffi.bool:ptr" sentinel_word
+;
+
+: ffi.bool:out.ptr immediate
+    "ffi.bool:out.ptr" sentinel_word
+;
+
+: ffi.bool:in/out.ptr immediate
+    "ffi.bool:in/out.ptr" sentinel_word
+;
+
 
 
 : ffi.i8 immediate
     "ffi.i8" sentinel_word
+;
+
+: ffi.i8:ptr immediate
+    "ffi.i8:ptr" sentinel_word
+;
+
+: ffi.i8:out.ptr immediate
+    "ffi.i8:out.ptr" sentinel_word
+;
+
+: ffi.i8:in/out.ptr immediate
+    "ffi.i8:in/out.ptr" sentinel_word
 ;
 
 
@@ -186,10 +212,34 @@
     "ffi.u8" sentinel_word
 ;
 
+: ffi.u8:ptr immediate
+    "ffi.u8:ptr" sentinel_word
+;
+
+: ffi.u8:out.ptr immediate
+    "ffi.u8:out.ptr" sentinel_word
+;
+
+: ffi.u8:in/out.ptr immediate
+    "ffi.u8:in/out.ptr" sentinel_word
+;
+
 
 
 : ffi.i16 immediate
     "ffi.i16" sentinel_word
+;
+
+: ffi.i16:ptr immediate
+    "ffi.i16:ptr" sentinel_word
+;
+
+: ffi.i16:out.ptr immediate
+    "ffi.i16:out.ptr" sentinel_word
+;
+
+: ffi.i16:in/out.ptr immediate
+    "ffi.i16:in/out.ptr" sentinel_word
 ;
 
 
@@ -198,10 +248,34 @@
     "ffi.u16" sentinel_word
 ;
 
+: ffi.u16:ptr immediate
+    "ffi.u16:ptr" sentinel_word
+;
+
+: ffi.u16:out.ptr immediate
+    "ffi.u16:out.ptr" sentinel_word
+;
+
+: ffi.u16:in/out.ptr immediate
+    "ffi.u16:in/out.ptr" sentinel_word
+;
+
 
 
 : ffi.i32 immediate
     "ffi.i32" sentinel_word
+;
+
+: ffi.i32:ptr immediate
+    "ffi.i32:ptr" sentinel_word
+;
+
+: ffi.i32:out.ptr immediate
+    "ffi.i32:out.ptr" sentinel_word
+;
+
+: ffi.i32:in/out.ptr immediate
+    "ffi.i32:in/out.ptr" sentinel_word
 ;
 
 
@@ -210,10 +284,34 @@
     "ffi.u32" sentinel_word
 ;
 
+: ffi.u32:ptr immediate
+    "ffi.u32:ptr" sentinel_word
+;
+
+: ffi.u32:out.ptr immediate
+    "ffi.u32:out.ptr" sentinel_word
+;
+
+: ffi.u32:in/out.ptr immediate
+    "ffi.u32:in/out.ptr" sentinel_word
+;
+
 
 
 : ffi.f32 immediate
     "ffi.f32" sentinel_word
+;
+
+: ffi.f32:ptr immediate
+    "ffi.f32:ptr" sentinel_word
+;
+
+: ffi.f32:out.ptr immediate
+    "ffi.f32:out.ptr" sentinel_word
+;
+
+: ffi.f32:in/out.ptr immediate
+    "ffi.f32:in/out.ptr" sentinel_word
 ;
 
 
@@ -222,14 +320,32 @@
     "ffi.f64" sentinel_word
 ;
 
+: ffi.f64:ptr immediate
+    "ffi.f64:ptr" sentinel_word
+;
+
+: ffi.f64:out.ptr immediate
+    "ffi.f64:out.ptr" sentinel_word
+;
+
+: ffi.f64:in/out.ptr immediate
+    "ffi.f64:in/out.ptr" sentinel_word
+;
+
 
 
 : ffi.string immediate
     "ffi.string" sentinel_word
 ;
 
+: ffi.string:ptr immediate
+    "ffi.string:ptr" sentinel_word
+;
 
+: ffi.string:out.ptr immediate
+    "ffi.string:out.ptr" sentinel_word
+;
 
-: ffi.void-ptr immediate
-    "ffi.void-ptr" sentinel_word
+: ffi.string:in/out.ptr immediate
+    "ffi.string:in/out.ptr" sentinel_word
 ;

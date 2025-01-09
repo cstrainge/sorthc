@@ -91,7 +91,7 @@ namespace sorth::run_time::data_structures
         // Make sure that the call to the word was successful.
         if (result)
         {
-            set_last_error(("Structure " + definition_ptr->name +
+            set_last_error(("1 Structure " + definition_ptr->name +
                             " initialization failed.").c_str());
             return 1;
         }
@@ -102,7 +102,7 @@ namespace sorth::run_time::data_structures
 
         if (!defaults.is_array() || pop_result)
         {
-            set_last_error(("Structure " + definition_ptr->name +
+            set_last_error(("2 Structure " + definition_ptr->name +
                             " initialization failed.").c_str());
 
             return 1;
