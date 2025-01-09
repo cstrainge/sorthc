@@ -181,6 +181,20 @@ namespace sorth::compilation
         };
 
 
+        // To be implemented, but not yet.  This will be especially useful for byte-buffers and the
+        // void:in/out.ptr type when that is implemented.
+        enum class ObjectType
+        {
+            // The stack value is temporary and will be freed after the pop.  In only and out only
+            // parameters are implicitly temporary.
+            temporary,
+
+            // The stack value will be saved on pop and returned after the call.  Only valid for
+            // in/out parameters.
+            retain
+        };
+
+
         // Map of ffi type names to llvm types.
         struct FfiTypeInfo
         {
@@ -190,18 +204,28 @@ namespace sorth::compilation
             // How do we process this value, before and after the call?
             PassDirection direction = PassDirection::in;
 
+            ObjectType object_type = ObjectType::temporary;
+
             // The raw LLVM type representation of the type.
             llvm::Type* type;
 
-            // Generate code the pop from the stack and assign to the variable.
-            std::function<llvm::CallInst*(llvm::IRBuilder<>&,
-                                          const RuntimeApi&,llvm::Value*)> pop_value;
+            // Generate code the pop from the stack and assign to the variable, retrun a LLVM value
+            // referring to an i1 if there is a possibility of the generated code can error out.
+            // Otherwise return nullptr.
+            std::function<llvm::Value*(llvm::IRBuilder<>&,
+                                       const RuntimeApi&,
+                                       llvm::Value*)> pop_value;
 
-            // Generate code to free any external memory the value used, like strings.
+            // Generate code to free any external memory the value used, like strings.  It is
+            // assumed that this code will not be able to generate errors.
             std::function<void(llvm::IRBuilder<>&,const RuntimeApi&,llvm::Value*)> free_value;
 
-            // Generate code to push the value onto the stack.
-            std::function<void(llvm::IRBuilder<>&,const RuntimeApi&,llvm::Value*)> push_value;
+            // Generate code to push the value onto the stack.  Return a LLVM value referring to an
+            // i1 if there is a possibility of the generated code can error out.  Otherwise return
+            // nullptr.
+            std::function<llvm::Value*(llvm::IRBuilder<>&,
+                                       const RuntimeApi&,
+                                       llvm::Value*)> push_value;
         };
 
 
@@ -316,6 +340,7 @@ namespace sorth::compilation
                                          llvm::Value* variable)
                             {
                                 // Nothing to do.
+                                return nullptr;
                             }
                     };
 
@@ -337,6 +362,8 @@ namespace sorth::compilation
                                          llvm::Value* variable)
                             {
                                 builder.CreateCall(runtime.stack_push_bool, variable);
+
+                                return nullptr;
                             }
                     };
 
@@ -383,6 +410,8 @@ namespace sorth::compilation
 
                                 // Push the value onto the stack.
                                 builder.CreateCall(runtime.stack_push_int, extended_value);
+
+                                return nullptr;
                             }
                     };
 
@@ -429,6 +458,8 @@ namespace sorth::compilation
 
                                 // Push the value onto the stack.
                                 builder.CreateCall(runtime.stack_push_int, extended_value);
+
+                                return nullptr;
                             }
                     };
 
@@ -475,6 +506,8 @@ namespace sorth::compilation
 
                                 // Push the value onto the stack.
                                 builder.CreateCall(runtime.stack_push_int, extended_value);
+
+                                return nullptr;
                             }
                     };
 
@@ -521,6 +554,8 @@ namespace sorth::compilation
 
                                 // Push the value onto the stack.
                                 builder.CreateCall(runtime.stack_push_int, extended_value);
+
+                                return nullptr;
                             }
                     };
 
@@ -567,6 +602,8 @@ namespace sorth::compilation
 
                                 // Push the value onto the stack.
                                 builder.CreateCall(runtime.stack_push_int, extended_value);
+
+                                return nullptr;
                             }
                     };
 
@@ -613,6 +650,8 @@ namespace sorth::compilation
 
                                 // Push the value onto the stack.
                                 builder.CreateCall(runtime.stack_push_int, extended_value);
+
+                                return nullptr;
                             }
                     };
 
@@ -638,6 +677,8 @@ namespace sorth::compilation
 
                                 auto loaded = builder.CreateLoad(int64_type, variable);
                                 builder.CreateCall(runtime.stack_push_int, loaded);
+
+                                return nullptr;
                             }
                     };
 
@@ -663,6 +704,8 @@ namespace sorth::compilation
 
                                 auto loaded = builder.CreateLoad(int64_type, variable);
                                 builder.CreateCall(runtime.stack_push_int, loaded);
+
+                                return nullptr;
                             }
                     };
 
@@ -711,6 +754,8 @@ namespace sorth::compilation
 
                                 // Push the value onto the stack.
                                 builder.CreateCall(runtime.stack_push_double, extended_value);
+
+                                return nullptr;
                             }
                     };
 
@@ -739,6 +784,8 @@ namespace sorth::compilation
                                 // Nothing fancy to do here, just push the value onto the stack.
 
                                 builder.CreateCall(runtime.stack_push_double, { variable });
+
+                                return nullptr;
                             }
                     };
 
@@ -765,6 +812,8 @@ namespace sorth::compilation
                                          llvm::Value* variable)
                             {
                                 builder.CreateCall(runtime.stack_push_string, variable);
+
+                                return nullptr;
                             }
                     };
 
@@ -1402,12 +1451,11 @@ namespace sorth::compilation
                                                           llvm::StructType* struct_type,
                                                           const byte_code::StructureType& structure)
         {
-            auto void_type = llvm::Type::getVoidTy(builder.getContext());
             auto bool_type = llvm::Type::getInt1Ty(builder.getContext());
             auto struct_ptr_type = llvm::PointerType::getUnqual(struct_type);
 
             // Create the function signature.
-            auto function_type = llvm::FunctionType::get(void_type,
+            auto function_type = llvm::FunctionType::get(bool_type,
                                                          { struct_ptr_type },
                                                          false);
 
@@ -1528,7 +1576,7 @@ namespace sorth::compilation
                                 {
                                     // Generate the code to convert the native structure into a
                                     // Forth struct and push that struct onto the stack.
-                                    builder.CreateCall(push_function, { variable });
+                                    return builder.CreateCall(push_function, { variable });
                                 }
                         };
 
@@ -1601,6 +1649,17 @@ namespace sorth::compilation
                                           llvm::StructType* struct_type,
                                           llvm::Function* function)
         {
+            auto generate_block = [&builder, &function]()
+                {
+                    static size_t next_block_index = 0;
+                    std::string name = "push_check_" + std::to_string(next_block_index);
+
+                    auto block = llvm::BasicBlock::Create(builder.getContext(), name, function);
+                    ++next_block_index;
+
+                    return block;
+                };
+
             auto bool_type = llvm::Type::getInt1Ty(builder.getContext());
 
             // Get the ffi information for the structure.
@@ -1681,7 +1740,26 @@ namespace sorth::compilation
                                                          i);
 
                 // Convert and push the value itself.
-                field_type.push_value(builder, runtime, field_ref);
+                auto push_result = field_type.push_value(builder, runtime, field_ref);
+
+                // Check to see if it's possible that the push can fail.
+                if (push_result != nullptr)
+                {
+                    // It looks like it can, so we should generate code to check the result.
+                    auto comparison_result = builder.CreateICmpNE(push_result,
+                                                                  builder.getInt1(0));
+
+                    // If the push was successful, we can move on to the next parameter.
+                    // Otherwise we need to jump to the error block.
+                    auto next_block = generate_block();
+
+                    builder.CreateCondBr(comparison_result,
+                                            exit_error_block,
+                                            next_block);
+
+                    // We are done with the current block, so move on to the next one.
+                    builder.SetInsertPoint(next_block);
+                }
 
                 // Push the field index.
                 builder.CreateCall(runtime.stack_push_int, { builder.getInt64(i) });
@@ -1711,7 +1789,7 @@ namespace sorth::compilation
             builder.SetInsertPoint(exit_block);
             builder.CreateCall(runtime.free_variable, { struct_variable });
             auto return_value = builder.CreateLoad(bool_type, return_variable);
-            builder.CreateRetVoid();
+            builder.CreateRet(return_value);
         }
 
 
@@ -2815,6 +2893,17 @@ namespace sorth::compilation
                                           llvm::IRBuilder<>& builder,
                                           const RuntimeApi& runtime_api)
         {
+            auto generate_block = [&context, &word]()
+                {
+                    static size_t next_block_index = 0;
+                    std::string name = "block_" + std::to_string(next_block_index);
+
+                    auto block = llvm::BasicBlock::Create(context, name, word.function);
+                    ++next_block_index;
+
+                    return block;
+                };
+
             // Create the entry point for the wrapper function.
             auto entry_block = llvm::BasicBlock::Create(context, "entry_block", word.function);
             builder.SetInsertPoint(entry_block);
@@ -2826,21 +2915,6 @@ namespace sorth::compilation
 
             // Get the count of parameters for the foreign function call.
             const size_t parameter_count = word.ffi_info->parameters.size();
-
-            // Generate blocks for the error checking after all the pops we need to do from the data
-            // stack.
-            auto pop_blocks = std::vector<llvm::BasicBlock*>();
-            pop_blocks.reserve(parameter_count);
-
-            for (size_t i = 0; i < parameter_count; ++i)
-            {
-                std::stringstream stream;
-
-                stream << "pop_block_" << i;
-
-                auto block = llvm::BasicBlock::Create(context, stream.str(), word.function);
-                pop_blocks.push_back(block);
-            }
 
             // Generate the block to handle errors and the final exit block that returns the error
             // status back to the caller.
@@ -2885,41 +2959,34 @@ namespace sorth::compilation
 
                 // Call the type handler to generate the code to pop the value off of the stack and
                 // translate it into the native type.
-                llvm::CallInst* pop_result = nullptr;
                 auto param_direction = ffi_parameter.type.direction;
 
                 // If the parameter is an input or in/out parameter, we need to pop the value off
                 // of the stack, otherwise we don't actually generate any code to pop the value.
-                llvm::Value* comparison_result = nullptr;
+                llvm::Value* pop_result = nullptr;
 
                 if (param_direction != PassDirection::out)
                 {
-                    comparison_result = ffi_parameter.type.pop_value(builder,
-                                                                     runtime_api,
-                                                                     parameter_variable);
+                    pop_result = ffi_parameter.type.pop_value(builder,
+                                                              runtime_api,
+                                                              parameter_variable);
                 }
 
                 // Now we need to generate the code to check to see if the pop was successful.
-                if (comparison_result != nullptr)
+                if (pop_result != nullptr)
                 {
-                    comparison_result = builder.CreateICmpNE(comparison_result, builder.getInt1(0));
+                    auto comparison_result = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                    auto next_block = generate_block();
+
+                    // If the pop was successful, we can move on to the next parameter.  Otherwise
+                    // we need to jump to the error block.
+                    builder.CreateCondBr(comparison_result,
+                                        exit_error_block,
+                                        next_block);
+
+                    // We are done with the current block, so move on to the next one.
+                    builder.SetInsertPoint(next_block);
                 }
-                else
-                {
-                    // A pop was not required, so we just mark it as successful.
-                    comparison_result = builder.getInt1(0);
-                }
-
-                // If the pop was successful, we can move on to the next parameter.  Otherwise we
-                // need to jump to the error block.
-                size_t next_block_index = parameter_count - i - 1;
-
-                builder.CreateCondBr(comparison_result,
-                                     exit_error_block,
-                                     pop_blocks[next_block_index]);
-
-                // We are done with the current block, so move on to the next one.
-                builder.SetInsertPoint(pop_blocks[next_block_index]);
             }
 
             // Now that all of our parameter variables have been populated, we can call the foreign
@@ -2980,9 +3047,26 @@ namespace sorth::compilation
                 if (   (direction == PassDirection::out)
                     || (direction == PassDirection::in_out))
                 {
-                    ffi_parameter.type.push_value(builder,
-                                                  runtime_api,
-                                                  parameter_variables[i]);
+                    auto push_result = ffi_parameter.type.push_value(builder,
+                                                                     runtime_api,
+                                                                     parameter_variables[i]);
+
+                    if (push_result != nullptr)
+                    {
+                        auto comparison_result = builder.CreateICmpNE(push_result,
+                                                                      builder.getInt1(0));
+
+                        // If the push was successful, we can move on to the next parameter.
+                        // Otherwise we need to jump to the error block.
+                        auto next_block = generate_block();
+
+                        builder.CreateCondBr(comparison_result,
+                                             exit_error_block,
+                                             next_block);
+
+                        // We are done with the current block, so move on to the next one.
+                        builder.SetInsertPoint(next_block);
+                    }
                 }
             }
 
@@ -3223,6 +3307,8 @@ namespace sorth::compilation
 
         // Create the word_table for the runtime.
         create_word_table(words, module, context);
+
+//module->print(llvm::outs(), nullptr);
 
         // Now that all code has been generated, verify that the module is well-formed.
         if (verifyModule(*module, &llvm::errs()))
