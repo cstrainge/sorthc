@@ -2172,18 +2172,37 @@ namespace sorth::compilation
                                             std::shared_ptr<llvm::Module>& module,
                                             llvm::LLVMContext& context)
         {
+            // Cache the string constants so we don't create a new one for each use.
+            static std::unordered_map<std::string, llvm::GlobalVariable*> string_constants;
+
             // Get our types.
             auto char_type = llvm::Type::getInt8Ty(context);
             auto char_ptr_type = llvm::PointerType::getUnqual(char_type);
 
-            // Create the constant data array for the string then create a global variable to
-            // hold it.
-            auto string_constant = llvm::ConstantDataArray::getString(context, text, true);
-            auto global = new llvm::GlobalVariable(*module,
-                                                    string_constant->getType(),
-                                                    true,
-                                                    llvm::GlobalValue::PrivateLinkage,
-                                                    string_constant);
+            // Check the cache to see if we've already created a global variable for this string.
+            llvm::GlobalVariable* global = nullptr;
+            auto iterator = string_constants.find(text);
+
+            if (iterator == string_constants.end())
+            {
+                // This string is unique so far, so create a global variable for it.
+                //
+                // Create the constant data array for the string then create a global variable to
+                // hold it.
+                auto string_constant = llvm::ConstantDataArray::getString(context, text, true);
+                global = new llvm::GlobalVariable(*module,
+                                                  string_constant->getType(),
+                                                  true,
+                                                  llvm::GlobalValue::PrivateLinkage,
+                                                  string_constant);
+
+                string_constants[text] = global;
+            }
+            else
+            {
+                // Just use the one from the cache.
+                global = iterator->second;
+            }
 
             // Create a pointer to the global variable for the string constant.
             llvm::Value* string_ptr = builder.CreatePointerCast(global, char_ptr_type);
@@ -3503,7 +3522,7 @@ namespace sorth::compilation
         module->setDataLayout(target_machine->createDataLayout());
 
         // Uncomment the following line to print the module to stdout for debugging.
-        module->print(llvm::outs(), nullptr);
+        //module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;
