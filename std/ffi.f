@@ -170,6 +170,16 @@
     "ffi.void" sentinel_word
 ;
 
+: ffi.void:ptr immediate
+    "ffi.void:ptr" sentinel_word
+;
+
+( ffi.void:out.ptr is unsupported. )
+
+: ffi.void:in/out.ptr immediate
+    "ffi.void:in/out.ptr" sentinel_word
+;
+
 
 
 : ffi.bool immediate
