@@ -246,21 +246,13 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     ( Were we able to close the file? )
     result @ -1 =
     if
-        file-fd @ posix.errno "Unable to close file {}, error code {}." string.format throw
+        file-fd @ posix.strerror "Unable to close file {}, {}." string.format throw
     then
 ;
 
 
 
 ( socket.connect is implemented in the run-time library. )
-
-
-
-( file.size@ is implemented in the run-time library. )
-
-
-
-( file.exists? is implemented in the run-time library. )
 
 
 
