@@ -75,13 +75,18 @@
 
 
 
+( TODO: Checkout how these structures are defined in macOS. )
+
+
+
+( The posix timespec structure as defined in 64-bit Linux. )
 ffi.# posix.timespec
     ffi.u64 tv_sec -> 0 ,
     ffi.u64 tv_nsec -> 0
 ;
 
 
-
+( The posix stat structure as defined in 64-bit Linux. )
 ffi.# posix.stat-struct
     ffi.u64 st_dev -> 0 ,
     ffi.u64 st_ino -> 0 ,
@@ -104,18 +109,15 @@ ffi.# posix.stat-struct
 
 
 
-( As of now, wrappers for a few of the posix functions are implemented in the runtime library. )
-( Hopefully they'll be moved out at some point in the future as the FFI matures. )
+( We rely on the run-time library to define posix.errno and posix.set-errno.  This is because we )
+( don't have a way to deal with functions that return pointers to values, which the errno macro )
+( depends on to return a thread local errno value. )
 
 
 
-( Import some POSIX functions. )
+( Import the posix file handling functions. )
 
 ffi.fn open as posix.open ffi.string ffi.i32 ffi.var-arg -> ffi.i32
-
-( ffi.var errno as posix.errno , posix.set-errno -> ffi.i32 )
-( posix.errno is implemented in the run-time library. )
-( posix.set-errno is implemented in the run-time library. )
 
 ffi.fn strerror as posix.strerror ffi.i32 -> ffi.string
 
