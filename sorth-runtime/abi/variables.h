@@ -28,6 +28,12 @@ extern "C"
     void release_variable_block() noexcept;
 
 
+    // Get a pointer to the byte buffer data in the variable at it's current cursor position.
+    // Returns 1 if the variable is not a byte buffer.
+    uint8_t get_byte_buffer_ptr(sorth::run_time::data_structures::Value* buffer,
+                                uint8_t** output) noexcept;
+
+
     // Search the list of slabs for the variable by index and return the value.
     bool read_variable(size_t index, sorth::run_time::data_structures::Value* output) noexcept;
 

@@ -121,9 +121,9 @@ ffi.# posix.stat-struct
 
 ( posix.fcntl is implemented in the run-time library. )
 
-( posix.read-buffer is implemented in the run-time library. )
+ffi.fn read as posix.read ffi.i32 ffi.void:ptr ffi.u64 -> ffi.i64
 
-( posix.write-buffer is implemented in the run-time library. )
+ffi.fn write as posix.write ffi.i32 ffi.void:ptr ffi.u64 -> ffi.i64
 
 ffi.fn chmod as posix.chmod ffi.string ffi.u32 -> ffi.i32
 
@@ -231,7 +231,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     variable! file-fd
     -1 variable! result
 
-    ( Clear the last error, if any. )
+    ( We'll be checking for posix.EINTR... )
     posix.EINTR posix.set-errno
 
     ( Attempt to close the file, keeping in mind we may be interrupted by a signal. )
@@ -249,10 +249,6 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
         file-fd @ posix.strerror "Unable to close file {}, {}." string.format throw
     then
 ;
-
-
-
-( socket.connect is implemented in the run-time library. )
 
 
 
@@ -286,14 +282,51 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
 ( short if the end of the file is reached. )
 : file.@  ( byte-count file-id -- buffer )
     variable! file-fd
-    variable! byte-count
+    variable! total-size
 
-    ( Create a new buffer to hold the read data and fill it from the file, returning the new )
-    ( buffer to the caller. )
-    byte-count @ buffer.new dup file-fd @ posix.read-buffer -1 =
+    ( Create a new buffer to hold the read data. )
+    total-size @ buffer-new variable! buffer
+    0 variable! read-bytes
+
+    ( Attempt to read the requested number of bytes from the file, keeping in mind we may be )
+    ( interrupted by a signal. )
+    begin
+        0 posix.set-errno
+
+        ( Read the requested number of bytes from the file, and keep track of how many bytes were )
+        ( actually read. )
+        file-fd @ buffer @ total-size @ read-bytes @ -  posix.read  read-bytes !
+
+        ( Check to see if the read was successful. )
+        read-bytes @ 0 >=
+        if
+            ( Update the buffer's position to reflect the number of bytes read. )
+            buffer @  buffer @ buffer.position@ read-bytes @ +  buffer.position!
+        else
+            ( If the read failed, check to see if we were interrupted by a signal. )
+            read-bytes @ -1 =
+            posix.errno posix.EINTR <>
+            &&
+            if
+                ( Looks like it was some other error. )
+                break
+            then
+        then
+
+        ( Keep reading until we've read the entire buffer or we've reached the end of the file. )
+        buffer @ buffer.position@ total-size @ =
+        file-fd @ file.is-eof?
+        ||
+    until
+
+    ( Was the read successful? )
+    read-bytes @ -1 =
     if
         file-fd @ posix.strerror "Unable to read from fd {}: {}." string.format throw
     then
+
+    ( Return the new buffer to the caller. )
+    buffer @
 ;
 
 
@@ -360,26 +393,65 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
 ( Write a value as text, or a byte-buffer as binary. )
 : file.!  ( value file-id -- )
     variable! file-fd
-    variable! value
+    variable! buffer
 
-    ( If the value isn't a buffer, convert it to a string and write it to one. )
-    value @ value.is-buffer? '
+    ( If the value isn't a buffer, convert it to a string and write that string to a new buffer. )
+    buffer @ value.is-buffer? '
     if
         ( Make sure that value is a string, and create a new buffer to hold it. )
-        value @ value.to-string
-        dup string.size@ dup buffer.new value !
+        buffer @ value.to-string
+        dup string.size@ dup buffer.new buffer !
 
         ( Write the string to the buffer. )
         ( Note, buffer.string! expects it's parameters to be passed as string buffer size. )
-        ( string size ) value @ swap buffer.string!
+        ( string size ) buffer @ swap buffer.string!
     then
 
     ( Now that value is a byte-buffer, write it to the file.  Keeping in mind that we may be )
     ( interrupted by a signal. )
-    value @ file-fd @ posix.write-buffer  -1  =
+    buffer @ 0 buffer.position!
+
+    ( Get the total number of bytes we're to write.  Also keep track of how many bytes we've )
+    ( written so far. )
+    buffer @ buffer.size@ variable! total-size
+    0 variable! written-bytes
+
+    ( Attempt to write the buffer to the file, keeping in mind we may be interrupted by a signal )
+    ( or that the write may not be able to write the entire buffer in one go. )
+    begin
+        0 posix.set-errno
+
+        ( Write the buffer to the file, and keep track of how many bytes were actually written. )
+        file-fd @  buffer @  total-size @ written-bytes @ -  posix.write  written-bytes !
+
+        ( Check to see if the write was successful. )
+        written-bytes @ 0>=
+        if
+            ( Update the buffer's position to reflect the number of bytes written. )
+            buffer @  buffer @ buffer.position@ written-bytes @ +  buffer.position!
+        else
+            ( If the write failed, check to see if we were interrupted by a signal. )
+            written-bytes -1 =
+            posix.errno posix.EINTR <>
+            &&
+            if
+                ( Looks like it was some other error. )
+                break
+            then
+        then
+
+        ( Keep writing until we've written the entire buffer. )
+        buffer @ buffer.position@ total-size @ =
+    until
+
+    ( Was the write successful. )
+    written-bytes @ -1 =
     if
         file-fd @ posix.strerror "Unable to write to fd {}: {}." string.format throw
     then
+
+    ( Reset the buffer's position to the beginning. )
+    buffer @ 0 buffer.position!
 ;
 
 
@@ -404,8 +476,8 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
 
 
 
-( Read a FD and get the size of the associated file. )
-: file.size@  ( file-id -- size )
+( Read a FD or file path and get the size of the associated file. )
+: file.size@  ( file -- size )
     variable! file
 
     variable result

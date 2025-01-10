@@ -28,6 +28,9 @@ extern "C"
     void debug_print_bool(bool value);
 
 
+    void debug_print_hex_int(uint64_t value);
+
+
 }
 
 

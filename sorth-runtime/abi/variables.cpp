@@ -125,6 +125,22 @@ extern "C"
     }
 
 
+    // Get a pointer to the byte buffer data in the variable at it's current cursor position.
+    // Returns 1 if the variable is not a byte buffer.
+    uint8_t get_byte_buffer_ptr(Value* buffer, uint8_t** output) noexcept
+    {
+        if (!buffer->is_byte_buffer())
+        {
+            set_last_error("Expected a byte buffer value.");
+            return 1;
+        }
+
+        *output = static_cast<uint8_t*>(buffer->get_byte_buffer()->position_ptr());
+
+        return 0;
+    }
+
+
     // Search the list of slabs for the variable by index and return the value.
     bool read_variable(size_t index, Value* output) noexcept
     {

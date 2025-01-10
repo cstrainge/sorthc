@@ -63,6 +63,14 @@ extern "C"
     }
 
 
+    void debug_print_hex_int(uint64_t value)
+    {
+        std::cerr << "0x" << std::hex << std::setw(16) << std::setfill('0')
+                  << value << std::dec
+                  << std::endl;
+    }
+
+
 }
 
 

@@ -176,9 +176,7 @@
 
 ( ffi.void:out.ptr is unsupported. )
 
-: ffi.void:in/out.ptr immediate
-    "ffi.void:in/out.ptr" sentinel_word
-;
+( ffi.void:in/out.ptr is unsupported. )
 
 
 

@@ -230,6 +230,21 @@ extern "C"
     }
 
 
+    uint8_t word_buffer_get_size()
+    {
+        ByteBufferPtr buffer = stack_pop_as_byte_buffer();
+
+        if (!buffer)
+        {
+            return 1;
+        }
+
+        stack_push_int(buffer->size());
+
+        return 0;
+    }
+
+
     uint8_t word_buffer_set_position()
     {
         int64_t new_position;
@@ -292,6 +307,7 @@ namespace sorth::run_time::abi::words
         registrar("buffer.float@", "word_buffer_read_float");
         registrar("buffer.string!", "word_buffer_write_string");
         registrar("buffer.string@", "word_buffer_read_string");
+        registrar("buffer.size@", "word_buffer_get_size");
         registrar("buffer.position!", "word_buffer_set_position");
         registrar("buffer.position@", "word_buffer_get_position");
     }

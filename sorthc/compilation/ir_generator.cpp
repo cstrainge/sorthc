@@ -112,6 +112,7 @@ namespace sorth::compilation
             llvm::Function* free_variable;
             llvm::Function* allocate_variable_block;
             llvm::Function* release_variable_block;
+            llvm::Function* get_byte_buffer_ptr;
             llvm::Function* read_variable;
             llvm::Function* write_variable;
             llvm::Function* deep_copy_variable;
@@ -139,6 +140,7 @@ namespace sorth::compilation
             llvm::Function* clear_last_error;
             llvm::Function* debug_print;
             llvm::Function* debug_print_bool;
+            llvm::Function* debug_print_hex_int;
         };
 
 
@@ -157,6 +159,10 @@ namespace sorth::compilation
         void call_debug_bool(llvm::Value* bool_value,
                              llvm::IRBuilder<>& builder,
                              const RuntimeApi& runtime);
+
+        void call_debug_int(llvm::Value* int_value,
+                            llvm::IRBuilder<>& builder,
+                            const RuntimeApi& runtime);
 
 
         // How should we pass this value to the function?
@@ -187,20 +193,6 @@ namespace sorth::compilation
         };
 
 
-        // To be implemented, but not yet.  This will be especially useful for byte-buffers and the
-        // void:in/out.ptr type when that is implemented.
-        enum class ObjectType
-        {
-            // The stack value is temporary and will be freed after the pop.  In only and out only
-            // parameters are implicitly temporary.
-            temporary,
-
-            // The stack value will be saved on pop and returned after the call.  Only valid for
-            // in/out parameters.
-            retain
-        };
-
-
         // Map of ffi type names to llvm types.
         struct FfiTypeInfo
         {
@@ -209,8 +201,6 @@ namespace sorth::compilation
 
             // How do we process this value, before and after the call?
             PassDirection direction = PassDirection::in;
-
-            ObjectType object_type = ObjectType::temporary;
 
             // The raw LLVM type representation of the type.
             llvm::Type* type;
@@ -346,6 +336,48 @@ namespace sorth::compilation
                                          llvm::Value* variable)
                             {
                                 // Nothing to do.
+                                return nullptr;
+                            }
+                    };
+
+                auto void_ptr_type = llvm::PointerType::get(llvm::Type::getInt8Ty(context), 0);
+
+                FfiTypeInfo void_ptr_info =
+                    {
+                        .type = llvm::PointerType::get(llvm::Type::getInt8Ty(context), 0),
+
+                        .pop_value = [](llvm::IRBuilder<>& builder,
+                                        const RuntimeApi& runtime,
+                                        llvm::Value* variable)
+                            {
+                                // Allocate a variable to hold the buffer reference.
+                                auto buffer_value = builder.CreateAlloca(runtime.value_struct_type);
+                                builder.CreateCall(runtime.initialize_variable, { buffer_value });
+
+                                // Try to pop a value from the data stack.
+                                auto pop_result = builder.CreateCall(runtime.stack_pop,
+                                                                     { buffer_value });
+
+                                // Call the runtime function to get the pointer to the buffer's
+                                // data.
+                                auto ptr_result = builder.CreateCall(runtime.get_byte_buffer_ptr,
+                                                                     { buffer_value, variable });
+
+                                // Combine the results of the two calls.
+                                auto result = builder.CreateOr(pop_result, ptr_result);
+
+                                return result;
+                            },
+
+                        .free_value = null_free,
+
+                        .push_value = [](llvm::IRBuilder<>& builder,
+                                         const RuntimeApi& runtime,
+                                         llvm::Value* variable)
+                            {
+                                // Nothing to do...  The pointer to the buffer was passed to the
+                                // foreign function so if it updates the buffer, the original will
+                                // have been updated inplace.
                                 return nullptr;
                             }
                     };
@@ -843,8 +875,9 @@ namespace sorth::compilation
                         ffi_types[name + ":in/out.ptr"] = ptr_info;
                     };
 
-                // Register our void type.
+                // Register our void types.
                 ffi_types["ffi.void"] = void_info;
+                ffi_types["ffi.void:ptr"] = void_ptr_info;
 
                 // Register the numeric types and their pointer variants.
                 register_sub_types("ffi.bool", bool_info);
@@ -1051,6 +1084,15 @@ namespace sorth::compilation
                                                                 "release_variable_block",
                                                                 module.get());
 
+            auto get_byte_buffer_ptr_signature = llvm::FunctionType::get(bool_type,
+                                                                         { value_struct_ptr_type,
+                                                                         char_ptr_ptr_type },
+                                                                         false);
+            auto get_byte_buffer_ptr = llvm::Function::Create(get_byte_buffer_ptr_signature,
+                                                              llvm::Function::ExternalLinkage,
+                                                              "get_byte_buffer_ptr",
+                                                              module.get());
+
             auto rw_variable_signature =
                                      llvm::FunctionType::get(bool_type,
                                                              { uint64_type, value_struct_ptr_type },
@@ -1221,6 +1263,14 @@ namespace sorth::compilation
                                                            "debug_print_bool",
                                                            module.get());
 
+            auto debug_print_hex_int_signature = llvm::FunctionType::get(void_type,
+                                                                        { uint64_type },
+                                                                        false);
+            auto debug_print_hex_int = llvm::Function::Create(debug_print_hex_int_signature,
+                                                              llvm::Function::ExternalLinkage,
+                                                              "debug_print_hex_int",
+                                                              module.get());
+
             return
                 {
                     .value_struct_type = value_struct_type,
@@ -1231,6 +1281,7 @@ namespace sorth::compilation
                     .free_variable = free_variable,
                     .allocate_variable_block = allocate_variable_block,
                     .release_variable_block = release_variable_block,
+                    .get_byte_buffer_ptr = get_byte_buffer_ptr,
                     .read_variable = read_variable,
                     .write_variable = write_variable,
                     .deep_copy_variable = deep_copy_variable,
@@ -1253,8 +1304,10 @@ namespace sorth::compilation
                     .get_last_error = get_last_error,
                     .push_last_error = push_last_error,
                     .clear_last_error = clear_last_error,
+
                     .debug_print = debug_print,
-                    .debug_print_bool = debug_print_bool
+                    .debug_print_bool = debug_print_bool,
+                    .debug_print_hex_int = debug_print_hex_int
                 };
         }
 
@@ -2226,6 +2279,17 @@ namespace sorth::compilation
                              const RuntimeApi& runtime)
         {
             builder.CreateCall(runtime.debug_print_bool, { bool_value });
+        }
+
+
+        void call_debug_int(llvm::Value* int_value,
+                            llvm::IRBuilder<>& builder,
+                            const RuntimeApi& runtime)
+        {
+            auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+            auto loaded = builder.CreateLoad(int64_type, int_value);
+
+            builder.CreateCall(runtime.debug_print_hex_int, { loaded });
         }
 
 
@@ -3522,7 +3586,7 @@ namespace sorth::compilation
         module->setDataLayout(target_machine->createDataLayout());
 
         // Uncomment the following line to print the module to stdout for debugging.
-        //module->print(llvm::outs(), nullptr);
+        module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;
