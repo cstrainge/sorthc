@@ -256,6 +256,8 @@ namespace sorth::compilation
         struct FfiFunctionInfo
         {
             std::string name;                      // The name of the function.
+            int64_t var_args;                      // The start of the variable parameters this
+                                                   // function takes.
             FfiFunctionParameterList parameters;   // The parameters of the function.
             FfiTypeInfo return_type;               // The return type of the function.
 
@@ -2057,10 +2059,13 @@ namespace sorth::compilation
                 std::vector<llvm::Type*> parameter_types;
                 parameter_types.reserve(function.argument_types.size());
 
+                function_info.var_args = function.var_args;
                 function_info.name = function.name;
                 function_info.return_type = collection.find_type(function.return_type,
                                                                  function.alias);
                 function_info.parameters.reserve(function.argument_types.size());
+
+                ssize_t arg_index = 0;
 
                 for (const auto& argument : function.argument_types)
                 {
@@ -2069,23 +2074,30 @@ namespace sorth::compilation
                     parameter.type_name = argument;
                     parameter.type = collection.find_type(argument, function.alias);
 
-                    if (parameter.type.passed_by == PassByType::value)
+                    // If the function takes var-args we don't record the types of the var-args
+                    // themselves in the function signature.
+                    //if (function_info.var_args > arg_index)
                     {
-                        parameter_types.push_back(parameter.type.type);
-                    }
-                    else
-                    {
-                        parameter_types.push_back(parameter.type.type->getPointerTo());
+                        if (parameter.type.passed_by == PassByType::value)
+                        {
+                            parameter_types.push_back(parameter.type.type);
+                        }
+                        else
+                        {
+                            parameter_types.push_back(parameter.type.type->getPointerTo());
+                        }
                     }
 
                     function_info.parameters.push_back(std::move(parameter));
+
+                    ++arg_index;
                 }
 
                 // Create the foreign function's signature and declaration.
                 llvm::FunctionType* signature =
                                              llvm::FunctionType::get(function_info.return_type.type,
                                                                      parameter_types,
-                                                                     false);
+                                                                     function.var_args != -1);
                 llvm::Function* function_declaration =
                                              llvm::Function::Create(signature,
                                                                     llvm::Function::ExternalLinkage,

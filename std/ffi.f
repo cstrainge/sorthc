@@ -5,6 +5,8 @@
     "" variable! alias            ( The Forth alias to use for the function. )
 
     0 [].new variable! arguments  ( The argument types to the function. )
+    -1 variable! var-arg          ( Flag for if the function is variadic, and what param is the )
+                                  ( starting one. )
 
     ( Get the next word and determine what to do with it. )
     word variable! next
@@ -19,21 +21,32 @@
         word next !
     then
 
+    0 variable! arg-index
+
     ( Gather the argument types for the function. )
     begin
         ( Keep going until we get the return value keyword, '->'. )
         next @ "->" <>
     while
-        ( Add the argument type to the list. )
-        next @ arguments [].push_back!!
+        ( Is this the var-arg flag? )
+        next @ "ffi.var-arg" =
+        if
+            ( It is, so set the flag and the starting index. )
+            arg-index @ var-arg !
+        else
+            ( Add the argument type to the list. )
+            next @ arguments [].push_back!!
+        then
 
         ( Get the next word. )
         word next !
+        arg-index ++!
     repeat
 
     ( Pass the function information to the compiler for registration. )
     original-name @
     alias @
+    var-arg @
     arguments @
     word              ( Get the return type. )
 
@@ -162,6 +175,12 @@
 
 : as immediate
     "as" sentinel_word
+;
+
+
+
+: ffi.var-arg immediate
+    "ffi.var-arg" sentinel_word
 ;
 
 

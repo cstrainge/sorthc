@@ -765,6 +765,7 @@ namespace sorth::compilation::run_time::built_in_words
         {
             auto ret_type = runtime.pop_as_string();
             auto arguments_value = runtime.pop_as_array();
+            auto var_args = runtime.pop_as_integer();
             auto alias = runtime.pop_as_string();
             auto name = runtime.pop_as_string();
 
@@ -772,6 +773,7 @@ namespace sorth::compilation::run_time::built_in_words
 
             function.name = name;
             function.alias = alias == "" ? name : alias;
+            function.var_args = var_args;
             function.return_type = ret_type;
 
             function.argument_types.reserve(arguments_value->size());

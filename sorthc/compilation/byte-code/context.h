@@ -23,6 +23,7 @@ namespace sorth::compilation::byte_code
     {
         std::string name;
         std::string alias;
+        int64_t var_args;
         std::vector<std::string> argument_types;
         std::string return_type;
     };
