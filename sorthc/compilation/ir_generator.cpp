@@ -851,7 +851,13 @@ namespace sorth::compilation
                                          const RuntimeApi& runtime,
                                          llvm::Value* variable)
                             {
-                                builder.CreateCall(runtime.stack_push_string, variable);
+                                auto char_type = llvm::Type::getInt8Ty(builder.getContext());
+                                auto char_ptr_type = llvm::PointerType::get(char_type, 0);
+
+                                // The variable will be a pointer to a pointer, so make sure to load
+                                // it first.
+                                auto loaded = builder.CreateLoad(char_ptr_type, variable);
+                                builder.CreateCall(runtime.stack_push_string, loaded);
 
                                 return nullptr;
                             }
