@@ -173,6 +173,57 @@
 
 
 
+( Define an external variable for use in Forth code.  We'll create reader and writer words for the )
+( variable.  Which the user uses to access the variable, because there needs to be something that )
+( performs the conversion from the internal value representation to the native representation. )
+( )
+( The syntax of the definition is: )
+( )
+( ffi.var name as reader-word , writer-word -> var-type )
+: ffi.var immediate
+    ( Get the name of the variable. )
+    word variable! var-name
+
+    ( Make sure that we got the as keyword. )
+    word variable! next
+    next @ "as" <>
+    if
+        next @ "Expected 'as' but found {}." string.format throw
+    then
+
+    ( Get the reader word name. )
+    word variable! reader-word
+
+    ( Make sure that we got the , keyword. )
+    word next !
+    next @ "," <>
+    if
+        next @ "Expected ',' but found {}." string.format throw
+    then
+
+    ( Get the writer word name. )
+    word variable! writer-word
+
+    ( Make sure that we got the -> keyword. )
+    word next !
+    next @ "->" <>
+    if
+        next @ "Expected '->' but found {}." string.format throw
+    then
+
+    word variable! type-name
+
+    ( Pass the variable information to the compiler for registration. )
+    type-name @
+    writer-word @
+    reader-word @
+    var-name @
+
+    ffi.register-var
+;
+
+
+
 : as immediate
     "as" sentinel_word
 ;

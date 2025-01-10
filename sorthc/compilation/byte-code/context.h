@@ -32,6 +32,27 @@ namespace sorth::compilation::byte_code
     using FfiFunctionList = std::vector<FfiFunction>;
 
 
+
+    // Information about a foreign variable.
+    struct FfiVariable
+    {
+        // The actual name of the variable.
+        std::string name;
+
+        // The foreign type of the variable.
+        std::string type;
+
+        // The name of the reader word.
+        std::string reader;
+
+        // The name of the writer word.
+        std::string writer;
+    };
+
+
+    using FfiVariableList = std::vector<FfiVariable>;
+
+
     // Where in the bytecode list should new code be inserted?
     enum class CodeInsertionPoint
     {
@@ -68,6 +89,9 @@ namespace sorth::compilation::byte_code
             // The list of FFI functions that have been defined in the script.
             FfiFunctionList ffi_functions;
 
+            // The list of FFI variables that have been defined in the script.
+            FfiVariableList ffi_variables;
+
             // Where in the top construction's code the next instructions should be inserted.
             CodeInsertionPoint insertion_point;
 
@@ -101,6 +125,8 @@ namespace sorth::compilation::byte_code
 
             void add_ffi_function(const FfiFunction& function);
 
+            void add_ffi_variable(const FfiVariable& variable);
+
             const SubScriptList& get_sub_scripts() const noexcept;
             SubScriptList&& take_sub_scripts() noexcept;
 
@@ -109,6 +135,9 @@ namespace sorth::compilation::byte_code
 
             const FfiFunctionList& get_ffi_functions() const noexcept;
             FfiFunctionList&& take_ffi_functions() noexcept;
+
+            const FfiVariableList& get_ffi_variables() const noexcept;
+            FfiVariableList&& take_ffi_variables() noexcept;
 
         public:
             // Compile the context into byte-code instructions.

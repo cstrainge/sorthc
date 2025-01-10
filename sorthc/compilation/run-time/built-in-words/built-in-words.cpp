@@ -834,6 +834,24 @@ namespace sorth::compilation::run_time::built_in_words
         }
 
 
+        void word_ffi_register_variable(CompilerRuntime& runtime)
+        {
+            auto type_name = runtime.pop_as_string();
+            auto writer_word = runtime.pop_as_string();
+            auto reader_word = runtime.pop_as_string();
+            auto variable_name = runtime.pop_as_string();
+
+            byte_code::FfiVariable variable;
+
+            variable.name = variable_name;
+            variable.type = type_name;
+            variable.reader = reader_word;
+            variable.writer = writer_word;
+
+            runtime.get_compile_context().add_ffi_variable(variable);
+        }
+
+
         void throw_if_out_of_bounds(CompilerRuntime& runtime,
                                     int64_t index,
                                     int64_t size,

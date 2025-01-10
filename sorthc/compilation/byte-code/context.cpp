@@ -13,6 +13,8 @@ namespace sorth::compilation::byte_code
       constructions(),
       words(),
       structure_types(),
+      ffi_functions(),
+      ffi_variables(),
       insertion_point(CodeInsertionPoint::end),
       tokens(std::move(tokens)),
       current_token(0)
@@ -63,6 +65,12 @@ namespace sorth::compilation::byte_code
     }
 
 
+    void Context::add_ffi_variable(const FfiVariable& variable)
+    {
+        ffi_variables.push_back(variable);
+    }
+
+
     const SubScriptList& Context::get_sub_scripts() const noexcept
     {
         return sub_scripts;
@@ -96,6 +104,18 @@ namespace sorth::compilation::byte_code
     FfiFunctionList&& Context::take_ffi_functions() noexcept
     {
         return std::move(ffi_functions);
+    }
+
+
+    const FfiVariableList& Context::get_ffi_variables() const noexcept
+    {
+        return ffi_variables;
+    }
+
+
+    FfiVariableList&& Context::take_ffi_variables() noexcept
+    {
+        return std::move(ffi_variables);
     }
 
 

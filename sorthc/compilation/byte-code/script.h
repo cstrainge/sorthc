@@ -30,6 +30,10 @@ namespace sorth::compilation::byte_code
     using FfiFunctionList = std::vector<FfiFunction>;
 
 
+    struct FfiVariable;
+    using FfiVariableList = std::vector<FfiVariable>;
+
+
     class Script : public std::enable_shared_from_this<Script>
     {
         private:
@@ -48,6 +52,9 @@ namespace sorth::compilation::byte_code
             // The list of FFI functions that have been defined in the script.
             FfiFunctionList ffi_functions;
 
+            // The list of FFI variables that have been defined in the script.
+            FfiVariableList ffi_variables;
+
             // A map of word names to their index in the words list.
             WordMap word_map;
 
@@ -61,6 +68,7 @@ namespace sorth::compilation::byte_code
                    ConstructionList&& words,
                    StructureTypeList&& structure_types,
                    FfiFunctionList&& ffi_functions,
+                   FfiVariableList&& ffi_variables,
                    ByteCode&& top_level) noexcept;
             Script(const Script& script) = default;
             Script(Script&& script) = default;
@@ -81,6 +89,8 @@ namespace sorth::compilation::byte_code
             const StructureTypeList& get_structure_types() const noexcept;
 
             const FfiFunctionList& get_ffi_functions() const noexcept;
+
+            const FfiVariableList& get_ffi_variables() const noexcept;
 
             const ByteCode& get_top_level() const noexcept;
     };
