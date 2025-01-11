@@ -252,6 +252,32 @@ namespace sorth::compilation
         };
 
 
+        // The word has no extra information.
+        struct NoExtraInfo
+        {
+        };
+
+
+        // The word is a variable handler, but is it a reader or a writer?
+        enum class FfiVariableHandler
+        {
+            reader,
+            writer
+        };
+
+
+        // Information about an external foreign variable handler
+        struct FfiVariableInfo
+        {
+            std::string name;
+            FfiTypeInfo type;
+
+            FfiVariableHandler handler_type;
+
+            llvm::GlobalVariable* global;
+        };
+
+
         // Information about an external foreign function.
         struct FfiFunctionInfo
         {
@@ -272,8 +298,13 @@ namespace sorth::compilation
             std::string handler_name;   // The name of the function that implements the word.
             bool was_referenced;        // True if the word was referenced by the script.
 
-            std::optional<byte_code::ByteCode> code;   // If unassigned, then it's a native word.
-            std::optional<FfiFunctionInfo> ffi_info;   // If the word is a FFI word.
+            // Extra information about the word depending on it's type.  If the word is defined in
+            // the run-time library, no extra information is needed.
+            std::variant<NoExtraInfo,
+                         byte_code::ByteCode,  // This is a word written in Forth.
+                         FfiFunctionInfo,      // THis is a foreign function handler.
+                         FfiVariableInfo>      // This is a foreign variable handler.
+                         extra_info;
 
             llvm::Function* function;   // The compiled function or declaration for the word.
         };
@@ -341,8 +372,6 @@ namespace sorth::compilation
                                 return nullptr;
                             }
                     };
-
-                auto void_ptr_type = llvm::PointerType::get(llvm::Type::getInt8Ty(context), 0);
 
                 FfiTypeInfo void_ptr_info =
                     {
@@ -911,7 +940,7 @@ namespace sorth::compilation
 
                 if (iterator == ffi_types.end())
                 {
-                    throw_error("Unknown FFI type: " + name + " referenced in " + ref_name + ".");
+                    throw_error("Unknown FFI type: " + name + " referenced by " + ref_name + ".");
                 }
 
                 return iterator->second;
@@ -949,13 +978,13 @@ namespace sorth::compilation
 
                 info.name = name;
                 info.handler_name = generate_ir_word_name(name);
-                info.code = word.get_code();
+                info.extra_info = word.get_code();
                 info.was_referenced = mark_referenced;
                 info.function = nullptr;
 
                 // Try to resolve any calls in the word's code.  We know for sure that some calls
                 // will remain unresolved, for example calls to constant and variable index words.
-                try_resolve_calls(*this, info.code.value());
+                try_resolve_calls(*this, std::get<byte_code::ByteCode>(info.extra_info));
 
                 // Add to the collections.
                 add_word(std::move(info));
@@ -1023,10 +1052,10 @@ namespace sorth::compilation
             for (auto& word : collection.words)
             {
                 // If the word isn't a native one...
-                if (word.code.has_value())
+                if (std::holds_alternative<byte_code::ByteCode>(word.extra_info))
                 {
                     // Try to resolve all the outstanding calls in the word's code.
-                    try_resolve_calls(collection, word.code.value());
+                    try_resolve_calls(collection, std::get<byte_code::ByteCode>(word.extra_info));
                 }
             }
         }
@@ -1381,10 +1410,11 @@ namespace sorth::compilation
                 init_word_info.handler_name = generate_ir_word_name(init_word_info.name);
                 init_word_info.was_referenced = true;
 
-                init_word_info.code = structure.get_initializer();
+                init_word_info.extra_info = structure.get_initializer();
 
                 // Make sure that any words used by the user init code are also marked as used.
-                mark_used_words(collection, init_word_info.code.value());
+                mark_used_words(collection,
+                                std::get<byte_code::ByteCode>(init_word_info.extra_info));
 
                 // Add the word to the collection.
                 collection.add_word(std::move(init_word_info));
@@ -2119,10 +2149,67 @@ namespace sorth::compilation
                 word_info.name = function.alias;
                 word_info.handler_name = generate_ir_word_name(function.alias);
                 word_info.was_referenced = false;
-                word_info.ffi_info = std::move(function_info);
+                word_info.extra_info = std::move(function_info);
                 word_info.function = nullptr;
 
                 collection.add_word(std::move(word_info));
+            }
+
+            // Now we need to create FFI words for any external variables that are used in the
+            // script.
+            for (const auto& ffi_variable : script->get_ffi_variables())
+            {
+                // Find the ffi type for this variable.
+                auto& variable_type = collection.find_type(ffi_variable.type, ffi_variable.name);
+
+                // Create the external global variable declaration.
+                auto global_variable = new llvm::GlobalVariable(*module,
+                                                                variable_type.type,
+                                                                false,
+                                                                llvm::GlobalValue::ExternalLinkage,
+                                                                nullptr,
+                                                                ffi_variable.name);
+
+                // Now create the word that will convert and push the variable onto the stack.
+                FfiVariableInfo ffi_reader_info =
+                    {
+                        .name = ffi_variable.name,
+                        .type = variable_type,
+                        .handler_type = FfiVariableHandler::reader,
+                        .global = global_variable
+                    };
+
+                WordInfo reader_info
+                    {
+                        .name = ffi_variable.reader,
+                        .handler_name = generate_ir_word_name(ffi_variable.reader),
+                        .was_referenced = false,
+                        .extra_info = std::move(ffi_reader_info),
+                        .function = nullptr
+                    };
+
+                // Info for the word that will take the new value from the stack and write it to the
+                // global variable.
+                FfiVariableInfo ffi_writer_info =
+                    {
+                        .name = ffi_variable.name,
+                        .type = variable_type,
+                        .handler_type = FfiVariableHandler::writer,
+                        .global = global_variable
+                    };
+
+                WordInfo writer_info
+                    {
+                        .name = ffi_variable.writer,
+                        .handler_name = generate_ir_word_name(ffi_variable.writer),
+                        .was_referenced = false,
+                        .extra_info = std::move(ffi_writer_info),
+                        .function = nullptr
+                    };
+
+                // Add the accessors to the collection.
+                collection.add_word(std::move(reader_info));
+                collection.add_word(std::move(writer_info));
             }
         }
 
@@ -2167,9 +2254,10 @@ namespace sorth::compilation
 
                             // If the word is a Forth word, then we need to mark all the words that
                             // it calls as referenced as well.
-                            if (word.code.has_value())
+                            if (std::holds_alternative<byte_code::ByteCode>(word.extra_info))
                             {
-                                mark_used_words(collection, word.code.value());
+                                mark_used_words(collection,
+                                                std::get<byte_code::ByteCode>(word.extra_info));
                             }
                         }
                     }
@@ -2186,9 +2274,10 @@ namespace sorth::compilation
 
                             word_info.was_referenced = true;
 
-                            if (word_info.code.has_value())
+                            if (std::holds_alternative<byte_code::ByteCode>(word_info.extra_info))
                             {
-                                mark_used_words(collection, word_info.code.value());
+                                mark_used_words(collection,
+                                               std::get<byte_code::ByteCode>(word_info.extra_info));
                             }
                         }
                     }
@@ -2209,8 +2298,9 @@ namespace sorth::compilation
             // If the word is a native word, then it's external and will be linked in later.
             // Otherwise the word is a Forth word and will be internal to the module.  Be it a
             // standard library word or one from the user script(s).
-            auto linkage = word.code.has_value() ? llvm::Function::InternalLinkage
-                                                 : llvm::Function::ExternalLinkage;
+            auto linkage = std::holds_alternative<byte_code::ByteCode>(word.extra_info)
+                           ? llvm::Function::InternalLinkage
+                           : llvm::Function::ExternalLinkage;
 
             // Create the function signature itself.  If it's a Forth word, it's body will be filled
             // out later.
@@ -3159,6 +3249,8 @@ namespace sorth::compilation
                     return block;
                 };
 
+            auto& word_ffi_info = std::get<FfiFunctionInfo>(word.extra_info);
+
             // Create the entry point for the wrapper function.
             auto entry_block = llvm::BasicBlock::Create(context, "entry_block", word.function);
             builder.SetInsertPoint(entry_block);
@@ -3169,7 +3261,7 @@ namespace sorth::compilation
             builder.CreateStore(builder.getInt1(0), return_variable);
 
             // Get the count of parameters for the foreign function call.
-            const size_t parameter_count = word.ffi_info->parameters.size();
+            const size_t parameter_count = word_ffi_info.parameters.size();
 
             // Generate the block to handle errors and the final exit block that returns the error
             // status back to the caller.
@@ -3196,7 +3288,7 @@ namespace sorth::compilation
 
             for (size_t i = 0; i < parameter_count; ++i)
             {
-                auto& ffi_parameter = word.ffi_info->parameters[i];
+                auto& ffi_parameter = word_ffi_info.parameters[i];
                 auto parameter_variable = builder.CreateAlloca(ffi_parameter.type.type,
                                                                nullptr,
                                                                "ffi_parameter");
@@ -3208,7 +3300,7 @@ namespace sorth::compilation
             // pop the parameters in reverse order.
             for (ssize_t i = parameter_count - 1; i >= 0; --i)
             {
-                auto& ffi_parameter = word.ffi_info->parameters[i];
+                auto& ffi_parameter = word_ffi_info.parameters[i];
                 auto& parameter_variable = parameter_variables[i];
 
 
@@ -3254,7 +3346,7 @@ namespace sorth::compilation
             // First generate the loads.
             for (size_t i = 0; i < parameter_count; ++i)
             {
-                auto& ffi_parameter = word.ffi_info->parameters[i];
+                auto& ffi_parameter = word_ffi_info.parameters[i];
                 llvm::Value* loaded_parameter = nullptr;
 
                 // Check to see if we're passing this parameter by value or by pointer.
@@ -3284,19 +3376,19 @@ namespace sorth::compilation
             }
 
             // We've loaded all the parameters now we need to allocate space for the return value.
-            auto return_value_variable = builder.CreateAlloca(word.ffi_info->return_type.type,
+            auto return_value_variable = builder.CreateAlloca(word_ffi_info.return_type.type,
                                                               nullptr,
                                                               "ffi_return_variable");
 
             // Finally we can call the function.
-            auto call_result = builder.CreateCall(word.ffi_info->function,
+            auto call_result = builder.CreateCall(word_ffi_info.function,
                                                   loaded_parameters);
             builder.CreateStore(call_result, return_value_variable);
 
             // Generate pushes for all out parameters.
             for (size_t i = 0; i < parameter_count; ++i)
             {
-                auto& ffi_parameter = word.ffi_info->parameters[i];
+                auto& ffi_parameter = word_ffi_info.parameters[i];
                 auto direction = ffi_parameter.type.direction;
 
                 if (   (direction == PassDirection::out)
@@ -3326,11 +3418,82 @@ namespace sorth::compilation
             }
 
             // Generate the push for the return value.
-            word.ffi_info->return_type.push_value(builder,
+            word_ffi_info.return_type.push_value(builder,
                                                   runtime_api,
                                                   return_value_variable);
 
             // Now that we're done here we can jump to the exit block.
+            builder.CreateBr(exit_block);
+        }
+
+
+        void generate_ir_for_ffi_accessor(WordCollection& collection,
+                                          const WordInfo& word,
+                                          std::shared_ptr<llvm::Module>& module,
+                                          llvm::LLVMContext& context,
+                                          llvm::IRBuilder<>& builder,
+                                          const RuntimeApi& runtime_api)
+        {
+            auto bool_type = llvm::Type::getInt1Ty(context);
+            auto& word_ffi_info = std::get<FfiVariableInfo>(word.extra_info);
+
+            // Create the entry point for the wrapper function.
+            auto entry_block = llvm::BasicBlock::Create(context, "entry_block", word.function);
+            builder.SetInsertPoint(entry_block);
+            auto return_variable = builder.CreateAlloca(bool_type,
+                                                        nullptr,
+                                                        "return_variable");
+            builder.CreateStore(builder.getInt1(0), return_variable);
+
+            // Create the exit and error blocks.
+            auto error_block = llvm::BasicBlock::Create(context, "error_block", word.function);
+            auto exit_block = llvm::BasicBlock::Create(context, "exit_block", word.function);
+
+            // Generate the code to report errors.
+            builder.SetInsertPoint(error_block);
+            builder.CreateStore(builder.getInt1(1), return_variable);
+            builder.CreateBr(exit_block);
+
+            // Generate the code to return the result.
+            builder.SetInsertPoint(exit_block);
+            auto return_value = builder.CreateLoad(bool_type, return_variable);
+            builder.CreateRet(return_value);
+
+            // Generate the code to read or write the variable.
+            builder.SetInsertPoint(entry_block);
+
+            llvm::Value* handler_result = nullptr;
+
+            if (word_ffi_info.handler_type == FfiVariableHandler::reader)
+            {
+                // We're reading, so we need to generate the code to read the value from the global
+                // and push it onto the stack.
+                handler_result = word_ffi_info.type.push_value(builder,
+                                                               runtime_api,
+                                                               word_ffi_info.global);
+            }
+            else
+            {
+                // We're writing, so we need to generate the code to pop the value from the stack
+                // and write it to the global.
+                handler_result = word_ffi_info.type.pop_value(builder,
+                                                              runtime_api,
+                                                              word_ffi_info.global);
+            }
+
+            // See if we need to generate the code to check for errors.
+            if (handler_result != nullptr)
+            {
+                auto cmp = builder.CreateICmpNE(handler_result, builder.getInt1(0));
+                auto check_block = llvm::BasicBlock::Create(context,
+                                                            "check_block",
+                                                            word.function);
+
+                builder.CreateCondBr(cmp, error_block, check_block);
+                builder.SetInsertPoint(check_block);
+            }
+
+            // We're done here, so jump to the exit block.
             builder.CreateBr(exit_block);
         }
 
@@ -3349,12 +3512,12 @@ namespace sorth::compilation
                 if (word.was_referenced)
                 {
                     // Is this a Forth word?  Or is it a wrapper for a foreign function?
-                    if (word.code.has_value())
+                    if (std::holds_alternative<byte_code::ByteCode>(word.extra_info))
                     {
                         // Create the word's IR function body.
                         generate_ir_for_byte_code(collection,
                                                   word.name,
-                                                  word.code.value(),
+                                                  std::get<byte_code::ByteCode>(word.extra_info),
                                                   module,
                                                   context,
                                                   builder,
@@ -3363,10 +3526,22 @@ namespace sorth::compilation
                                                   runtime_api,
                                                   false);
                     }
-                    else if (word.ffi_info.has_value())
+                    else if (std::holds_alternative<FfiFunctionInfo>(word.extra_info))
                     {
                         // Create the word's wrapper code for the underlying FFI function.
                         generate_ir_for_ffi_function(collection,
+                                                     word,
+                                                     module,
+                                                     context,
+                                                     builder,
+                                                     runtime_api);
+                    }
+                    else if (std::holds_alternative<FfiVariableInfo>(word.extra_info))
+                    {
+                        // We have a variable accessor.  So generate the code for reading or writing
+                        // to/from the global variable.
+
+                        generate_ir_for_ffi_accessor(collection,
                                                      word,
                                                      module,
                                                      context,

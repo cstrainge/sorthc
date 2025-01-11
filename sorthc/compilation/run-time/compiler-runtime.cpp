@@ -149,6 +149,7 @@ namespace sorth::compilation::run_time
         auto words = std::move(get_compile_context().take_words());
         auto structures = std::move(get_compile_context().take_structure_types());
         auto ffi_functions = std::move(get_compile_context().take_ffi_functions());
+        auto ffi_variables = std::move(get_compile_context().take_ffi_variables());
         auto code = std::move(construction.take_code());
 
         auto script = std::make_shared<byte_code::Script>(std::move(sub_scripts),
@@ -156,6 +157,7 @@ namespace sorth::compilation::run_time
                                                           std::move(words),
                                                           std::move(structures),
                                                           std::move(ffi_functions),
+                                                          std::move(ffi_variables),
                                                           std::move(code));
 
         // Cache the script, and return a reference to the new script.
