@@ -17,7 +17,7 @@ extern "C"
 {
 
 
-    uint8_t word_posix_errno()
+    uint8_t word_posix_get_errno()
     {
         stack_push_int(errno);
 
@@ -51,8 +51,8 @@ namespace sorth::run_time::abi::words
 
     void register_posix_words(const RuntimeWordRegistrar& registrar)
     {
-        registrar("posix.errno", "word_posix_errno");
-        registrar("posix.set-errno", "word_posix_set_errno");
+        registrar("posix.errno@", "word_posix_get_errno");
+        registrar("posix.errno!", "word_posix_set_errno");
     }
 
 

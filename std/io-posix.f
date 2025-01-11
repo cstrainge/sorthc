@@ -109,7 +109,7 @@ ffi.# posix.stat-struct
 
 
 
-( We rely on the run-time library to define posix.errno and posix.set-errno.  This is because we )
+( We rely on the run-time library to define posix.errno@ and posix.errno!.  This is because we )
 ( don't have a way to deal with functions that return pointers to values, which the errno macro )
 ( depends on to return a thread local errno value. )
 
@@ -162,7 +162,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     posix.S_IRUSR posix.S_IWUSR | posix.S_IRGRP | posix.S_IROTH | constant file-permissions
 
     ( Clear the last error, if any. )
-    0 posix.set-errno
+    0 posix.errno!
 
     ( Check to see if the file already exists. )
     path @ file.exists? variable! is-existing?
@@ -172,14 +172,14 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
         path @  mode @ extra-flags @ |  posix.open  file-fd !
 
         file-fd @ -1 <>
-        posix.errno posix.EINTR <>
+        posix.errno@ posix.EINTR <>
         ||
     until
 
     ( Were we able to open the file? )
     file-fd @ -1 =
     if
-        path @ posix.errno posix.strerror "Unable to open file {}: {}." string.format throw
+        path @ posix.errno@ posix.strerror "Unable to open file {}: {}." string.format throw
     then
 
     ( If the file didn't exist before, set some reasonable file permissions. )
@@ -189,7 +189,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
             file-fd @  file-permissions  posix.fchmod  chmod-error !
 
             chmod-error @ -1 <>
-            posix.errno posix.EINTR <>
+            posix.errno@ posix.EINTR <>
             ||
         until
 
@@ -198,7 +198,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
             file-fd @ file.close
 
             path @
-            posix.errno posix.strerror
+            posix.errno@ posix.strerror
             "Unable to set file permissions on {}: {}." string.format throw
         then
     then
@@ -237,12 +237,12 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     -1 variable! result
 
     ( We'll be checking for posix.EINTR... )
-    posix.EINTR posix.set-errno
+    posix.EINTR posix.errno!
 
     ( Attempt to close the file, keeping in mind we may be interrupted by a signal. )
     begin
         result @ -1 =
-        posix.errno posix.EINTR =
+        posix.errno@ posix.EINTR =
         &&
     while
         file-fd @ posix.close result !
@@ -251,7 +251,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     ( Were we able to close the file? )
     result @ -1 =
     if
-        file-fd @ posix.errno posix.strerror "Unable to close file {}, {}." string.format throw
+        file-fd @ posix.errno@ posix.strerror "Unable to close file {}, {}." string.format throw
     then
 ;
 
@@ -296,7 +296,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     ( Attempt to read the requested number of bytes from the file, keeping in mind we may be )
     ( interrupted by a signal. )
     begin
-        0 posix.set-errno
+        0 posix.errno!
 
         ( Read the requested number of bytes from the file, and keep track of how many bytes were )
         ( actually read. )
@@ -310,7 +310,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
         else
             ( If the read failed, check to see if we were interrupted by a signal. )
             read-bytes @ -1 =
-            posix.errno posix.EINTR <>
+            posix.errno@ posix.EINTR <>
             &&
             if
                 ( Looks like it was some other error. )
@@ -327,7 +327,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     ( Was the read successful? )
     read-bytes @ -1 =
     if
-        file-fd @ posix.errno posix.strerror "Unable to read from fd {}: {}." string.format throw
+        file-fd @ posix.errno@ posix.strerror "Unable to read from fd {}: {}." string.format throw
     then
 
     ( Return the new buffer to the caller. )
@@ -424,7 +424,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     ( Attempt to write the buffer to the file, keeping in mind we may be interrupted by a signal )
     ( or that the write may not be able to write the entire buffer in one go. )
     begin
-        0 posix.set-errno
+        0 posix.errno!
 
         ( Write the buffer to the file, and keep track of how many bytes were actually written. )
         file-fd @  buffer @  total-size @ written-bytes @ -  posix.write  written-bytes !
@@ -437,7 +437,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
         else
             ( If the write failed, check to see if we were interrupted by a signal. )
             written-bytes -1 =
-            posix.errno posix.EINTR <>
+            posix.errno@ posix.EINTR <>
             &&
             if
                 ( Looks like it was some other error. )
@@ -452,7 +452,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     ( Was the write successful. )
     written-bytes @ -1 =
     if
-        file-fd @ posix.errno posix.strerror "Unable to write to fd {}: {}." string.format throw
+        file-fd @ posix.errno@ posix.strerror "Unable to write to fd {}: {}." string.format throw
     then
 
     ( Reset the buffer's position to the beginning. )
@@ -505,7 +505,7 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
     ( Was the call successful or did it fail? )
     result @ -1 =
     if
-        file @ posix.errno posix.strerror "Unable to get file size for {}: {}." string.format throw
+        file @ posix.errno@ posix.strerror "Unable to get file size for {}: {}." string.format throw
     then
 
     ( Return the size of the file. )
