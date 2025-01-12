@@ -2,13 +2,20 @@
 {
     "cSpell.words":
     [
+        "alloca",
         "CGSCC",
         "cgsccam",
+        "datalayout",
         "doesnt",
         "fexceptions",
+        "getelementptr",
         "LLJIT",
+        "nonnull",
+        "noundef",
+        "preds",
         "sorthc",
-        "Unqual"
+        "Unqual",
+        "zeroinitializer"
     ],
     "cmake.additionalCompilerSearchDirs": [
         "C:\\Users\\nullp\\software\\llvm-install\\19.1.5\\bin"
@@ -19,5 +26,6 @@
         "-DCMAKE_C_COMPILER=clang",
         "-DCMAKE_CXX_COMPILER=clang++",
         "-G Ninja"
-    ]
+    ],
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++-19"
 }
