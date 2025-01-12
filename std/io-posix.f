@@ -64,14 +64,14 @@
 
 
 
-1   constant posix.F_GETFD
+1 constant posix.F_GETFD
 
 
 
 ( File seeking flags. )
-0   constant posix.SEEK_SET
-1   constant posix.SEEK_CUR
-2   constant posix.SEEK_END
+0 constant posix.SEEK_SET
+1 constant posix.SEEK_CUR
+2 constant posix.SEEK_END
 
 
 
@@ -109,6 +109,28 @@ ffi.# posix.stat-struct
 
 
 
+1 constant posix.AF_UNIX
+
+
+1 constant posix.SOCK_STREAM
+
+
+( Define the array of bytes that makes up the sun_path field of the sockaddr_un structure. )
+ffi.[] posix.sun_path 108 -> ffi.u8 as ffi.string ;
+
+
+( The posix sockaddr_un structure as defined in 64-bit Linux. )
+ffi.# posix.sockaddr_un  align 2
+    ffi.u16 sun_family -> 0 ,
+    posix.sun_path sun_path -> ""
+;
+
+
+( The size of the sockaddr_un structure, as defined in 64-bit Linux. )
+110 constant posix.sockaddr_un.size@
+
+
+
 ( We rely on the run-time library to define posix.errno@ and posix.errno!.  This is because we )
 ( don't have a way to deal with functions that return pointers to values, which the errno macro )
 ( depends on to return a thread local errno value. )
@@ -118,6 +140,10 @@ ffi.# posix.stat-struct
 ( Import the posix file handling functions. )
 
 ffi.fn open as posix.open ffi.string ffi.i32 ffi.var-arg -> ffi.i32
+
+ffi.fn socket as posix.socket ffi.i32 ffi.i32 ffi.i32 -> ffi.i32
+
+ffi.fn connect as posix.connect ffi.i32 posix.sockaddr_un:ptr ffi.i32 -> ffi.i32
 
 ffi.fn strerror as posix.strerror ffi.i32 -> ffi.string
 
@@ -223,10 +249,27 @@ ffi.fn fstat as posix.fstat ffi.i32 posix.stat-struct:out.ptr -> ffi.i32
 
 
 ( Connect to a server's existing socket. )
-: socket.connect  ( path -- file-id )
+: socket.connect  ( path -- fd )
     variable! path
 
-    "The word socket.connect is not yet implemented." throw
+    posix.AF_UNIX posix.SOCK_STREAM posix.socket variable! fd
+
+    fd @ -1 =
+    if
+        posix.errno@ posix.strerror "Unable to create socket: {}." string.format throw
+    then
+
+    posix.sockaddr_un.new variable! sock-addr
+
+    posix.AF_UNIX sock-addr posix.sockaddr_un.sun_family!!
+    path @ sock-addr posix.sockaddr_un.sun_path!!
+
+    fd @ sock-addr @ posix.sockaddr_un.size@ posix.connect -1 =
+    if
+        posix.errno@ posix.strerror "Unable to connect to socket: {}." string.format throw
+    then
+
+    fd @
 ;
 
 

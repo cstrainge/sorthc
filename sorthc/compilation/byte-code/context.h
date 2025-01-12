@@ -53,6 +53,22 @@ namespace sorth::compilation::byte_code
     using FfiVariableList = std::vector<FfiVariable>;
 
 
+    // Definition of array types.
+    struct FfiArrayType
+    {
+        std::string name;
+        ssize_t size;
+        std::string element_type;
+        bool treat_as_string;
+    };
+
+
+    using TypeInfo = std::variant<StructureType, FfiArrayType>;
+
+
+    using DataTypeList = std::vector<TypeInfo>;
+
+
     // Where in the bytecode list should new code be inserted?
     enum class CodeInsertionPoint
     {
@@ -84,7 +100,7 @@ namespace sorth::compilation::byte_code
             ConstructionList words;
 
             // The list of structure types that have been defined in the script.
-            StructureTypeList structure_types;
+            DataTypeList data_types;
 
             // The list of FFI functions that have been defined in the script.
             FfiFunctionList ffi_functions;
@@ -127,6 +143,8 @@ namespace sorth::compilation::byte_code
 
             void add_ffi_variable(const FfiVariable& variable);
 
+            void add_ffi_array_type(const FfiArrayType& array_type);
+
             const SubScriptList& get_sub_scripts() const noexcept;
             SubScriptList&& take_sub_scripts() noexcept;
 
@@ -138,6 +156,9 @@ namespace sorth::compilation::byte_code
 
             const FfiVariableList& get_ffi_variables() const noexcept;
             FfiVariableList&& take_ffi_variables() noexcept;
+
+            const DataTypeList& get_types() const noexcept;
+            DataTypeList&& take_types() noexcept;
 
         public:
             // Compile the context into byte-code instructions.

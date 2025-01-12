@@ -23,15 +23,19 @@ namespace sorth::compilation::byte_code
     using WordMap = std::unordered_map<std::string, size_t>;
 
 
-    class StructureType;
-    using StructureTypeList = std::vector<StructureType>;
 
     struct FfiFunction;
     using FfiFunctionList = std::vector<FfiFunction>;
 
-
     struct FfiVariable;
     using FfiVariableList = std::vector<FfiVariable>;
+
+    struct StructureType;
+
+    struct FfiArrayType;
+
+    using TypeInfo = std::variant<StructureType, FfiArrayType>;
+    using DataTypeList = std::vector<TypeInfo>;
 
 
     class Script : public std::enable_shared_from_this<Script>
@@ -47,7 +51,7 @@ namespace sorth::compilation::byte_code
             ConstructionList words;
 
             // The list of structure types that have been defined in the script.
-            StructureTypeList structure_types;
+            DataTypeList data_types;
 
             // The list of FFI functions that have been defined in the script.
             FfiFunctionList ffi_functions;
@@ -66,7 +70,7 @@ namespace sorth::compilation::byte_code
             Script(SubScriptList&& sub_scripts,
                    std::filesystem::path&& script_path,
                    ConstructionList&& words,
-                   StructureTypeList&& structure_types,
+                   DataTypeList&& data_types,
                    FfiFunctionList&& ffi_functions,
                    FfiVariableList&& ffi_variables,
                    ByteCode&& top_level) noexcept;
@@ -86,7 +90,7 @@ namespace sorth::compilation::byte_code
             const ConstructionList& get_words() const noexcept;
             const Construction& get_word(const std::string& name) const;
 
-            const StructureTypeList& get_structure_types() const noexcept;
+            const DataTypeList& get_data_types() const noexcept;
 
             const FfiFunctionList& get_ffi_functions() const noexcept;
 

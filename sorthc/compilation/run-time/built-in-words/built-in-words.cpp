@@ -321,6 +321,31 @@ namespace sorth::compilation::run_time::built_in_words
         }
 
 
+        void word_string_to_number(CompilerRuntime& runtime)
+        {
+            auto string = runtime.pop_as_string();
+
+            if (string.find('.', 0) != std::string::npos)
+            {
+                runtime.push(std::atof(string.c_str()));
+            }
+            else
+            {
+                auto value = std::strtoll(string.c_str(), nullptr, 10);
+                runtime.push(static_cast<int64_t>(value));
+            }
+        }
+
+
+        void word_value_to_string(CompilerRuntime& runtime)
+        {
+            std::stringstream stream;
+
+            stream << runtime.pop();
+            runtime.push(stream.str());
+        }
+
+
         void word_dup(CompilerRuntime& runtime)
         {
             auto next = runtime.pop();
@@ -841,14 +866,34 @@ namespace sorth::compilation::run_time::built_in_words
             auto reader_word = runtime.pop_as_string();
             auto variable_name = runtime.pop_as_string();
 
-            byte_code::FfiVariable variable;
-
-            variable.name = variable_name;
-            variable.type = type_name;
-            variable.reader = reader_word;
-            variable.writer = writer_word;
+            byte_code::FfiVariable variable =
+                {
+                    .name = variable_name,
+                    .type = type_name,
+                    .reader = reader_word,
+                    .writer = writer_word
+                };
 
             runtime.get_compile_context().add_ffi_variable(variable);
+        }
+
+
+        void word_ffi_register_array_type(CompilerRuntime& runtime)
+        {
+            auto treat_as_string = runtime.pop_as_bool();
+            auto value_type_name = runtime.pop_as_string();
+            auto array_length = runtime.pop_as_integer();
+            auto array_name = runtime.pop_as_string();
+
+            byte_code::FfiArrayType array_type =
+                {
+                    .name = array_name,
+                    .size = array_length,
+                    .element_type = value_type_name,
+                    .treat_as_string = treat_as_string
+                };
+
+            runtime.get_compile_context().add_ffi_array_type(array_type);
         }
 
 
@@ -1097,6 +1142,10 @@ namespace sorth::compilation::run_time::built_in_words
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[defined?]", word_is_defined_im);
         ADD_NATIVE_IMMEDIATE_WORD(runtime, "[undefined?]", word_is_undefined_im);
 
+        // Conversion words.
+        ADD_NATIVE_WORD(runtime, "string.to-number", word_string_to_number);
+        ADD_NATIVE_WORD(runtime, "value.to-string", word_value_to_string);
+
         // Stack manipulation words.
         ADD_NATIVE_WORD(runtime, "dup", word_dup);
         ADD_NATIVE_WORD(runtime, "drop", word_drop);
@@ -1143,6 +1192,8 @@ namespace sorth::compilation::run_time::built_in_words
         // Define FFI words and types.
         ADD_NATIVE_WORD(runtime, "ffi.register-function", word_ffi_register_function);
         ADD_NATIVE_WORD(runtime, "ffi.register-structure", word_ffi_register_structure);
+        ADD_NATIVE_WORD(runtime, "ffi.register-variable", word_ffi_register_variable);
+        ADD_NATIVE_WORD(runtime, "ffi.register-array-type", word_ffi_register_array_type);
 
         // Array words.
         ADD_NATIVE_WORD(runtime, "[].new", word_array_new);

@@ -141,6 +141,12 @@ namespace sorth::compilation
             llvm::Function* debug_print;
             llvm::Function* debug_print_bool;
             llvm::Function* debug_print_hex_int;
+
+            // Standard library functions.
+            llvm::Function* malloc;
+            llvm::Function* free;
+            llvm::Function* strncpy;
+            llvm::Function* strcpy;
         };
 
 
@@ -252,6 +258,21 @@ namespace sorth::compilation
         };
 
 
+        struct FfiArrayHelpers
+        {
+            byte_code::FfiArrayType array_ffi_info;
+
+            bool treat_as_string;
+            bool is_pointer;
+
+            llvm::ArrayType* type = nullptr;
+            FfiTypeInfo element_type;
+
+            llvm::Function* pop_handler = nullptr;
+            llvm::Function* push_handler = nullptr;
+        };
+
+
         // The word has no extra information.
         struct NoExtraInfo
         {
@@ -331,6 +352,7 @@ namespace sorth::compilation
             std::unordered_map<std::string, size_t> structure_map;
 
             std::vector<FfiStructHelpers> ffi_struct_helpers;
+            std::vector<FfiArrayHelpers> ffi_array_helpers;
 
             WordInfoList words;
             WordMap word_map;
@@ -996,7 +1018,8 @@ namespace sorth::compilation
                 // Some words are referenced by the compiler itself, so we'll mark them as as such.
                 static std::unordered_set<std::string> compiler_used_words =
                     {
-                        "#@", "#!", "value.is-structure?", "#.is-of-type?"
+                        "#@", "#!", "value.is-structure?", "value.is-array?", "#.is-of-type?",
+                        "[].new", "[].size@", "[]@", "[]!"
                     };
 
                 // Is this one of the compiler used words?
@@ -1308,6 +1331,39 @@ namespace sorth::compilation
                                                               "debug_print_hex_int",
                                                               module.get());
 
+            // Standard library functions.
+            auto malloc_signature = llvm::FunctionType::get(char_ptr_type, { uint64_type }, false);
+            auto malloc = llvm::Function::Create(malloc_signature,
+                                                 llvm::Function::ExternalLinkage,
+                                                 "malloc",
+                                                 module.get());
+
+            auto free_signature = llvm::FunctionType::get(void_type, { char_ptr_type }, false);
+            auto free = llvm::Function::Create(free_signature,
+                                               llvm::Function::ExternalLinkage,
+                                               "free",
+                                               module.get());
+
+            auto strncpy_signature = llvm::FunctionType::get(char_ptr_type,
+                                                            {
+                                                                char_ptr_type,
+                                                                char_ptr_type,
+                                                                uint64_type
+                                                            },
+                                                            false);
+            auto strncpy_fn = llvm::Function::Create(strncpy_signature,
+                                                     llvm::Function::ExternalLinkage,
+                                                     "strncpy",
+                                                     module.get());
+
+            auto strcpy_signature = llvm::FunctionType::get(char_ptr_type,
+                                                           { char_ptr_type, char_ptr_type },
+                                                           false);
+            auto strcpy_fn = llvm::Function::Create(strcpy_signature,
+                                                    llvm::Function::ExternalLinkage,
+                                                    "strcpy",
+                                                    module.get());
+
             return
                 {
                     .value_struct_type = value_struct_type,
@@ -1344,7 +1400,12 @@ namespace sorth::compilation
 
                     .debug_print = debug_print,
                     .debug_print_bool = debug_print_bool,
-                    .debug_print_hex_int = debug_print_hex_int
+                    .debug_print_hex_int = debug_print_hex_int,
+
+                    .malloc = malloc,
+                    .free = free,
+                    .strncpy = strncpy_fn,
+                    .strcpy = strcpy_fn
                 };
         }
 
@@ -1389,11 +1450,20 @@ namespace sorth::compilation
             }
 
             // Now create the structure words for this script.
-            const auto& structures = script->get_structure_types();
+            const auto& data_types = script->get_data_types();
 
             // Create the structure initialization word, and supporting accessor words.
-            for (const auto& structure : structures)
+            for (const auto& data_type : data_types)
             {
+                // Is this a structure?  If not move on.
+                if (!std::holds_alternative<byte_code::StructureType>(data_type))
+                {
+                    continue;
+                }
+
+                // Grab the structure data.
+                const auto& structure = std::get<byte_code::StructureType>(data_type);
+
                 // Register the structure with the word collection.
                 collection.add_structure(structure);
 
@@ -1577,7 +1647,316 @@ namespace sorth::compilation
         }
 
 
-        void register_ffi_structures(std::shared_ptr<llvm::Module>& module,
+        void register_ffi_struct_type(std::shared_ptr<llvm::Module>& module,
+                                      llvm::IRBuilder<>& builder,
+                                      WordCollection& collection,
+                                      const byte_code::StructureType& structure)
+        {
+            // Create the llvm structure type for the FFI structure.
+            const auto& ffi_info = structure.get_ffi_info().value();
+
+            std::vector<FfiTypeInfo> field_types;
+            std::vector<llvm::Type*> raw_types;
+
+            field_types.reserve(ffi_info.field_types.size());
+
+            // Translate the type names to llvm types.
+            for (const auto& field_type : ffi_info.field_types)
+            {
+                const auto& type_info = collection.find_type(field_type,
+                                                             "structure " + structure.get_name());
+
+                field_types.push_back(type_info);
+                raw_types.push_back(type_info.type);
+            }
+
+            // Create a llvm structure type for the FFI structure.
+            auto struct_type = llvm::StructType::create(raw_types, structure.get_name());
+
+            // Generate the pop and push functions for the structure.  They'll handle the stack
+            // management and conversion to/from the native structure.
+            auto pop_function = generate_structure_pop_signature(module,
+                                                                 builder,
+                                                                 struct_type,
+                                                                 structure);
+
+            auto push_function = generate_structure_push_signature(module,
+                                                                   builder,
+                                                                   struct_type,
+                                                                   structure);
+
+            // Register the pop and push functions with the collection for later code generation.
+            collection.ffi_struct_helpers.push_back(
+                {
+                    .structure_name = structure.get_name(),
+                    .structure_type = struct_type,
+                    .pop_handler = pop_function,
+                    .push_handler = push_function
+                });
+
+            // Register the new type.
+            FfiTypeInfo new_struct_info =
+                {
+                    .type = struct_type,
+
+                    .pop_value = [pop_function](llvm::IRBuilder<>& builder,
+                                                const RuntimeApi& runtime,
+                                                llvm::Value* variable)
+                        {
+                            // Generate the code to pop the structure from the stack and convert it
+                            // to the native structure.
+                            return builder.CreateCall(pop_function, { variable });
+                        },
+
+                    .free_value = [&collection,
+                                    &structure,
+                                    struct_type,
+                                    ffi_info](llvm::IRBuilder<>& builder,
+                                              const RuntimeApi& runtime,
+                                              llvm::Value* variable)
+                        {
+                            for (size_t i = 0; i < structure.get_field_names().size(); ++i)
+                            {
+                                // Get the underlying type information for the field.
+                                const auto& field_type = ffi_info.field_types[i];
+                                const auto& type_info =
+                                    collection.find_type(field_type,
+                                                        "structure " + structure.get_name());
+
+                                // Get a pointer to the field in the raw structure.  If the
+                                // free is never generated then the GEP will be tossed by
+                                // the optimizer.
+                                auto field_reference = builder.CreateStructGEP(struct_type,
+                                                                            variable,
+                                                                            i);
+
+                                // Call the free code generator for the field type.
+                                type_info.free_value(builder, runtime, field_reference);
+                            }
+                        },
+
+                    .push_value = [push_function](llvm::IRBuilder<>& builder,
+                                                    const RuntimeApi& runtime,
+                                                    llvm::Value* variable)
+                        {
+                            // Generate the code to convert the native structure into a
+                            // Forth struct and push that struct onto the stack.
+                            return builder.CreateCall(push_function, { variable });
+                        }
+                };
+
+            // Register the new structure type.
+            collection.ffi_types[structure.get_name()] = new_struct_info;
+
+            new_struct_info.passed_by = PassByType::pointer;
+            collection.ffi_types[structure.get_name() + ":ptr"] = new_struct_info;
+
+            new_struct_info.direction = PassDirection::out;
+            collection.ffi_types[structure.get_name() + ":out.ptr"] = new_struct_info;
+
+            new_struct_info.direction = PassDirection::in_out;
+            collection.ffi_types[structure.get_name() + ":in/out.ptr"] = new_struct_info;
+        }
+
+
+        llvm::Function* generate_array_pop_signature(std::shared_ptr<llvm::Module>& module,
+                                                     llvm::IRBuilder<>& builder,
+                                                     llvm::PointerType* array_ptr_type,
+                                                     const std::string& type_name,
+                                                     const byte_code::FfiArrayType& array)
+        {
+            auto bool_type = llvm::Type::getInt1Ty(builder.getContext());
+            auto function_type = llvm::FunctionType::get(bool_type, { array_ptr_type }, false);
+            auto function = llvm::Function::Create(function_type,
+                                                   llvm::Function::PrivateLinkage,
+                                                   "stack_pop_" + type_name + "_array_" +
+                                                       filter_ir_symbol_name(array.name),
+                                                   module.get());
+
+            return function;
+        }
+
+
+        llvm::Function* generate_array_push_signature(std::shared_ptr<llvm::Module>& module,
+                                                      llvm::IRBuilder<>& builder,
+                                                      llvm::PointerType* array_ptr_type,
+                                                      const std::string& type_name,
+                                                      const byte_code::FfiArrayType& array)
+        {
+            auto bool_type = llvm::Type::getInt1Ty(builder.getContext());
+            auto function_type = llvm::FunctionType::get(bool_type, { array_ptr_type }, false);
+            auto function = llvm::Function::Create(function_type,
+                                                   llvm::Function::PrivateLinkage,
+                                                   "stack_push_" + type_name + "_array_" +
+                                                       filter_ir_symbol_name(array.name),
+                                                   module.get());
+
+            return function;
+        }
+
+
+        void register_ffi_array_type(std::shared_ptr<llvm::Module>& module,
+                                     llvm::IRBuilder<>& builder,
+                                     WordCollection& collection,
+                                     const byte_code::FfiArrayType& array)
+        {
+
+            auto& element_type = collection.find_type(array.element_type, "array " + array.name);
+            auto array_type = llvm::ArrayType::get(element_type.type,
+                                                   array.size == -1 ? 0 : array.size);
+            auto array_ptr_type = llvm::PointerType::getUnqual(array_type);
+
+            auto pop_function = generate_array_pop_signature(module,
+                                                             builder,
+                                                             array_ptr_type,
+                                                             "static",
+                                                             array);
+
+            auto push_function = generate_array_push_signature(module,
+                                                               builder,
+                                                               array_ptr_type,
+                                                               "static",
+                                                               array);
+
+            collection.ffi_array_helpers.push_back(
+                {
+                    .array_ffi_info = array,
+                    .treat_as_string = array.treat_as_string,
+                    .is_pointer = false,
+                    .type = array_type,
+                    .pop_handler = pop_function,
+                    .push_handler = push_function
+                });
+
+            auto array_size = array.size;
+
+            // How do we allocate the array if it's a member of a struct???
+
+            FfiTypeInfo new_array_info =
+                {
+                    .type = array_type,
+
+                    .pop_value = [=](llvm::IRBuilder<>& builder,
+                                     const RuntimeApi& runtime,
+                                     llvm::Value* variable)
+                        {
+                            if (array_size == -1)
+                            {
+                                throw_error("Static arrays must have a fixed size.");
+                            }
+
+                            return builder.CreateCall(pop_function, { variable });
+                        },
+
+                    .free_value = [](llvm::IRBuilder<>& builder,
+                                     const RuntimeApi& runtime,
+                                     llvm::Value* variable)
+                        {
+                            // It's a fixed sized array, so we don't need to free it.
+                        },
+
+                    .push_value = [=](llvm::IRBuilder<>& builder,
+                                      const RuntimeApi& runtime,
+                                      llvm::Value* variable)
+                        {
+                            if (array_size == -1)
+                            {
+                                throw_error("Static arrays must have a fixed size.");
+                            }
+
+                            return builder.CreateCall(push_function, { variable });
+                        }
+                };
+
+            // Register the base array type.
+            collection.ffi_types[array.name] = new_array_info;
+
+            // Create helper handlers for the array pointer types.
+            pop_function = generate_array_pop_signature(module,
+                                                        builder,
+                                                        array_ptr_type,
+                                                        "pointer",
+                                                        array);
+
+            push_function = generate_array_push_signature(module,
+                                                          builder,
+                                                          array_ptr_type,
+                                                          "pointer",
+                                                          array);
+
+            // Are we treating the array as a string?
+            auto array_treat_as_string = array.treat_as_string;
+
+            FfiTypeInfo new_array_ptr_info =
+                {
+                    .passed_by = PassByType::pointer,
+
+                    .type = array_ptr_type,
+
+                    .pop_value = [=](llvm::IRBuilder<>& builder,
+                                     const RuntimeApi& runtime,
+                                     llvm::Value* variable)
+                        {
+                            return builder.CreateCall(pop_function, { variable });
+                        },
+
+                    .free_value = [=](llvm::IRBuilder<>& builder,
+                                      const RuntimeApi& runtime,
+                                      llvm::Value* variable)
+                        {
+                            // Make sure to call the correct free function.
+                            if (array_treat_as_string)
+                            {
+                                builder.CreateCall(runtime.stack_free_string, { variable });
+                            }
+                            else
+                            {
+                                builder.CreateCall(runtime.free, { variable });
+                            }
+                        },
+
+                    .push_value = [=](llvm::IRBuilder<>& builder,
+                                      const RuntimeApi& runtime,
+                                      llvm::Value* variable)
+                        {
+                            // Check to see if the array size is fixed.  If it isn't we won't have
+                            // any way to know how many elements are in the array.  Unless it's
+                            // being treated as a string value, then at least we have the
+                            // null-terminator.
+                            if (   (array_size == -1)
+                                && (!array_treat_as_string))
+                            {
+                                throw_error("Out and in/out non-string arrays "
+                                            "must have fixed size.");
+                            }
+
+                            return builder.CreateCall(push_function, { variable });
+                        }
+                };
+
+            // Register the helpers for the pointer array type.
+            collection.ffi_array_helpers.push_back(
+                {
+                    .array_ffi_info = array,
+                    .treat_as_string = array.treat_as_string,
+                    .is_pointer = true,
+                    .type = array_type,
+                    .pop_handler = pop_function,
+                    .push_handler = push_function
+                });
+
+            // Add the pointer type variants as well.
+            collection.ffi_types[array.name + ":ptr"] = new_array_ptr_info;
+
+            new_array_ptr_info.direction = PassDirection::out;
+            collection.ffi_types[array.name + ":out.ptr"] = new_array_ptr_info;
+
+            new_array_ptr_info.direction = PassDirection::in_out;
+            collection.ffi_types[array.name + ":in/out.ptr"] = new_array_ptr_info;
+        }
+
+
+        void register_ffi_data_types(std::shared_ptr<llvm::Module>& module,
                                      llvm::IRBuilder<>& builder,
                                      WordCollection& collection,
                                      const byte_code::ScriptPtr& script)
@@ -1585,122 +1964,26 @@ namespace sorth::compilation
             // First register the structures in the sub-scripts.
             for (const auto& sub_script : script->get_sub_scripts())
             {
-                register_ffi_structures(module, builder, collection, sub_script);
+                register_ffi_data_types(module, builder, collection, sub_script);
             }
 
             // Now register the structures in this script.
-            for (const auto& structure : script->get_structure_types())
+            for (const auto& data_type : script->get_data_types())
             {
-                if (structure.get_ffi_info().has_value())
+                if (std::holds_alternative<byte_code::StructureType>(data_type))
                 {
-                    // Create the llvm structure type for the FFI structure.
-                    const auto& ffi_info = structure.get_ffi_info().value();
-                    std::vector<FfiTypeInfo> field_types;
-                    std::vector<llvm::Type*> raw_types;
+                    const auto& structure = std::get<byte_code::StructureType>(data_type);
 
-                    field_types.reserve(ffi_info.field_types.size());
-
-                    // Translate the type names to llvm types.
-                    for (const auto& field_type : ffi_info.field_types)
+                    if (structure.get_ffi_info().has_value())
                     {
-                        const auto& type_info =
-                                          collection.find_type(field_type,
-                                                               "structure " + structure.get_name());
-
-                        field_types.push_back(type_info);
-                        raw_types.push_back(type_info.type);
+                        register_ffi_struct_type(module, builder, collection, structure);
                     }
+                }
+                else if (std::holds_alternative<byte_code::FfiArrayType>(data_type))
+                {
+                    const auto& array = std::get<byte_code::FfiArrayType>(data_type);
 
-                    // Create a llvm structure type for the FFI structure.
-                    auto struct_type = llvm::StructType::create(raw_types, structure.get_name());
-
-                    // Generate the pop and push functions for the structure.  They'll handle the
-                    // stack management and conversion to/from the native structure.
-                    auto pop_function = generate_structure_pop_signature(module,
-                                                                         builder,
-                                                                         struct_type,
-                                                                         structure);
-
-                    auto push_function = generate_structure_push_signature(module,
-                                                                           builder,
-                                                                           struct_type,
-                                                                           structure);
-
-                    // Register the pop and push functions with the collection for later code
-                    // generation.
-                    collection.ffi_struct_helpers.push_back(
-                        {
-                            .structure_name = structure.get_name(),
-                            .structure_type = struct_type,
-                            .pop_handler = pop_function,
-                            .push_handler = push_function
-                        });
-
-                    // Register the new type.
-                    FfiTypeInfo new_struct_info =
-                        {
-                            .type = struct_type,
-
-                            .pop_value = [pop_function](llvm::IRBuilder<>& builder,
-                                                        const RuntimeApi& runtime,
-                                                        llvm::Value* variable)
-                                {
-                                    // Generate the code to pop the structure from the stack and
-                                    // convert it to the native structure.
-                                    return builder.CreateCall(pop_function, { variable });
-                                },
-
-                            .free_value = [&collection,
-                                           &structure,
-                                           struct_type,
-                                           ffi_info](llvm::IRBuilder<>& builder,
-                                                     const RuntimeApi& runtime,
-                                                     llvm::Value* variable)
-                                {
-                                    for (size_t i = 0; i < structure.get_field_names().size(); ++i)
-                                    {
-                                        // Get the underlying type information for the field.
-                                        const auto& field_type = ffi_info.field_types[i];
-                                        const auto& type_info =
-                                          collection.find_type(field_type,
-                                                               "structure " + structure.get_name());
-
-                                        // Get a pointer to the field in the raw structure.  If the
-                                        // free is never generated then the GEP will be tossed by
-                                        // the optimizer.
-                                        auto field_reference = builder.CreateStructGEP(struct_type,
-                                                                                 variable,
-                                                                                 i);
-
-                                        // Call the free code generator for the field type.
-                                        type_info.free_value(builder, runtime, field_reference);
-                                    }
-                                },
-
-                            .push_value = [push_function](llvm::IRBuilder<>& builder,
-                                                          const RuntimeApi& runtime,
-                                                          llvm::Value* variable)
-                                {
-                                    // Generate the code to convert the native structure into a
-                                    // Forth struct and push that struct onto the stack.
-                                    return builder.CreateCall(push_function, { variable });
-                                }
-                        };
-
-                    // Register the new structure type.
-                    collection.ffi_types[structure.get_name()] = new_struct_info;
-
-                    // Add the pointer type variant as well.
-                    new_struct_info.passed_by = PassByType::pointer;
-                    collection.ffi_types[structure.get_name() + ":ptr"] = new_struct_info;
-
-                    // Add the pointer out type.
-                    new_struct_info.direction = PassDirection::out;
-                    collection.ffi_types[structure.get_name() + ":out.ptr"] = new_struct_info;
-
-                    // Add the pointer in/out type.
-                    new_struct_info.direction = PassDirection::in_out;
-                    collection.ffi_types[structure.get_name() + ":in/out.ptr"] = new_struct_info;
+                    register_ffi_array_type(module, builder, collection, array);
                 }
             }
         }
@@ -2063,6 +2346,494 @@ namespace sorth::compilation
                                              struct_info,
                                              ffi_helpers.structure_type,
                                              ffi_helpers.push_handler);
+            }
+        }
+
+
+        void generate_array_pop_body(std::shared_ptr<llvm::Module>& module,
+                                     llvm::IRBuilder<>& builder,
+                                     const RuntimeApi& runtime,
+                                     WordCollection& collection,
+                                     const FfiArrayHelpers& ffi_helper)
+        {
+            auto bool_type = llvm::Type::getInt1Ty(builder.getContext());
+            auto bool_ptr_type = bool_type->getPointerTo();
+            auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+
+            // The function we're generating code for.
+            auto function = ffi_helper.pop_handler;
+
+            auto generate_block = [&builder, function]()
+                {
+                    static size_t next_block_index = 0;
+                    std::string name = "block_" + std::to_string(next_block_index);
+
+                    auto block = llvm::BasicBlock::Create(builder.getContext(), name, function);
+                    ++next_block_index;
+
+                    return block;
+                };
+
+            // Create the main blocks of the function.
+            auto entry_block = llvm::BasicBlock::Create(builder.getContext(), "entry", function);
+            auto error_block = llvm::BasicBlock::Create(builder.getContext(), "error", function);
+            auto exit_block = llvm::BasicBlock::Create(builder.getContext(), "exit", function);
+
+            // Allocate and initialize the return variable.
+            builder.SetInsertPoint(entry_block);
+            auto return_variable = builder.CreateAlloca(bool_type, nullptr, "return_variable");
+            builder.CreateStore(builder.getInt1(0), return_variable);
+
+            // Create an error block that will set the error flag on failure.
+            builder.SetInsertPoint(error_block);
+            builder.CreateStore(builder.getInt1(1), return_variable);
+            builder.CreateBr(exit_block);
+
+            // Create the exit block that will clean up and return the error flag.
+            builder.SetInsertPoint(exit_block);
+
+            auto return_value = builder.CreateLoad(bool_type, return_variable);
+            builder.CreateRet(return_value);
+
+            // Generate the code to pop the array from the stack and convert it to a raw array.
+            builder.SetInsertPoint(entry_block);
+
+            // Get a reference to the pointer passed to the function.
+            auto parameter_ptr = function->getArg(0);
+
+            // If we're treating the array as a string we need to generate different code.
+            if (ffi_helper.treat_as_string)
+            {
+                if (ffi_helper.is_pointer)
+                {
+                    auto pointer_type = ffi_helper.type->getPointerTo();
+
+                    // The parameter is a pointer to a pointer.  Load the underlying pointer and
+                    // pop the string directly into it.
+                    auto raw_array = builder.CreateLoad(pointer_type, parameter_ptr);
+
+                    // Pop the string from the stack.
+                    auto pop_result = builder.CreateCall(runtime.stack_pop_string, { raw_array });
+
+                    // Make sure that the pop was successful.
+                    auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                    builder.CreateCondBr(cmp, error_block, exit_block);
+                }
+                else
+                {
+                    // Allocate a variable to hold the string pointer.
+                    auto string_ptr =
+                                     builder.CreateAlloca(runtime.value_struct_type->getPointerTo(),
+                                                          nullptr,
+                                                          "string_ptr");
+
+                    // Pop The string from the stack.
+                    auto pop_result = builder.CreateCall(runtime.stack_pop_string, { string_ptr });
+
+                    // Check to see if the pop was successful.
+                    auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+                    auto next_block = generate_block();
+                    builder.CreateCondBr(cmp, error_block, next_block);
+                    builder.SetInsertPoint(next_block);
+
+                    // Memcpy the string into the variable, because it's a pointer to the raw
+                    // storage, making sure not to exceed the size of the buffer, if known.
+                    auto& ffi_info = ffi_helper.array_ffi_info;
+
+                    if (ffi_info.size != -1)
+                    {
+                        // The size is known, so we need to figure out the string size and make sure
+                        // we don't copy more.
+
+                        // Load the size of the string.
+                        auto string_max_size = builder.getInt64(ffi_info.size);
+
+                        auto loaded_ptr =
+                                       builder.CreateLoad(runtime.value_struct_type->getPointerTo(),
+                                                          string_ptr);
+
+                        // Call strncpy to copy the string.
+                        builder.CreateCall(runtime.strncpy,
+                                           { parameter_ptr, loaded_ptr, string_max_size });
+                    }
+                    else
+                    {
+                        // We don't know the size so we'll just have to do a strcpy.
+                        builder.CreateCall(runtime.strcpy, { parameter_ptr, string_ptr });
+                    }
+
+                    // Free the popped string.
+                    builder.CreateCall(runtime.stack_free_string, { string_ptr });
+
+                    // All done.
+                    builder.CreateBr(exit_block);
+                }
+
+                return;
+            }
+
+            // Allocate and init a variable to hold the Forth array.
+            auto forth_variable = builder.CreateAlloca(runtime.value_struct_type,
+                                                       nullptr,
+                                                       "forth_variable");
+            builder.CreateCall(runtime.initialize_variable, { forth_variable });
+
+            // Ok, we're generating a traditional array.
+            auto pop_result = builder.CreateCall(runtime.stack_pop, { forth_variable });
+
+            // Check to see if the value we popped is an array.
+            const auto is_array_index = collection.word_map["value.is-array?"];
+            const auto& is_array_fn = collection.words[is_array_index].function;
+
+            auto call_result = builder.CreateCall(is_array_fn, { });
+            auto cmp = builder.CreateICmpNE(call_result, builder.getInt1(0));
+            auto next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            auto is_array_value = builder.CreateAlloca(bool_type, nullptr, "is_array");
+            pop_result = builder.CreateCall(runtime.stack_pop_bool, { is_array_value });
+            cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            auto loaded_is_array = builder.CreateLoad(bool_type, is_array_value);
+            cmp = builder.CreateICmpEQ(loaded_is_array, builder.getInt1(1));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, next_block, error_block);
+
+            // We have an array.
+
+            auto array_size_word_index = collection.word_map["[].size@"];
+            auto array_size_word = collection.words[array_size_word_index].function;
+
+            // Is the array size fixed?
+            llvm::Value* array_size = nullptr;
+
+            // Store the size of the Forth array in a variable.
+            auto array_size_variable = builder.CreateAlloca(int64_type,
+                                                            nullptr,
+                                                            "array_size");
+
+            // Check to see if the Forth array is the right size?
+            builder.CreateCall(runtime.stack_push, { forth_variable });
+            builder.CreateCall(array_size_word, { });
+            pop_result = builder.CreateCall(runtime.stack_pop_int, { array_size_variable });
+
+            // Check to see if the pop was successful.
+            cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            // Check to see if the array size is fixed, if it is, we need to make sure that the
+            // Forth array is the right size.
+            if (ffi_helper.array_ffi_info.size != -1)
+            {
+                // Create an array size constant.
+                array_size = builder.getInt64(ffi_helper.array_ffi_info.size);
+
+                // Load the size of the array, and check to see if the Forth array the right size.
+                auto loaded_array_size = builder.CreateLoad(int64_type, array_size_variable);
+                cmp = builder.CreateICmpEQ(loaded_array_size, array_size);
+                next_block = generate_block();
+                auto size_error_block = generate_block();
+                builder.CreateCondBr(cmp, next_block, size_error_block);
+                builder.SetInsertPoint(size_error_block);
+
+                // Report the error.
+                auto error_message =
+                 define_string_constant("Array size mismatch for " + ffi_helper.array_ffi_info.name,
+                                        builder,
+                                        module,
+                                        builder.getContext());
+                builder.CreateCall(runtime.set_last_error, { error_message });
+                builder.CreateBr(error_block);
+
+                // The array is the right size, moving on...
+                builder.SetInsertPoint(next_block);
+            }
+            else
+            {
+                // The array size isn't fixed, so use the size we got from the Forth array.
+                array_size = builder.CreateLoad(int64_type, array_size_variable);
+            }
+
+            // We have the array size in items, but now we need to calculate the full byte size.
+            auto null_ptr = llvm::ConstantPointerNull::get(bool_ptr_type);
+            auto gep = builder.CreateGEP(ffi_helper.type,
+                                         null_ptr,
+                                         llvm::ConstantInt::get(int64_type, 1),
+                                         "size_gep");
+            auto size_of_element = builder.CreatePtrToInt(gep, int64_type, "size_of_element");
+            auto size_in_bytes = builder.CreateMul(array_size, size_of_element, "size_in_bytes");
+
+            // Allocate the array.
+            auto raw_array = builder.CreateCall(runtime.malloc, { size_in_bytes });
+            builder.CreateStore(raw_array, parameter_ptr);
+
+            // Create a looping structure and variable index.
+            auto loop_index = builder.CreateAlloca(int64_type, nullptr, "loop_index");
+            builder.CreateStore(builder.getInt64(0), loop_index);
+
+            // Init the index.
+            auto loop_block = llvm::BasicBlock::Create(builder.getContext(), "loop", function);
+            builder.CreateBr(loop_block);
+            builder.SetInsertPoint(loop_block);
+
+            // Check to see if the index is less than the array size.
+            auto loaded_index = builder.CreateLoad(int64_type, loop_index);
+            cmp = builder.CreateICmpSLT(loaded_index, array_size);
+            next_block = generate_block();
+
+            // If not jump to the exit block, we're all done.
+            builder.CreateCondBr(cmp, next_block, exit_block);
+
+            // Push the index on the stack.
+            builder.CreateCall(runtime.stack_push_int, { loaded_index });
+
+            // Push the array on the stack.
+            builder.CreateCall(runtime.stack_push, { forth_variable });
+
+            // All array read.
+            auto array_read_index = collection.word_map["[]@"];
+            auto array_read_word = collection.words[array_read_index].function;
+
+            auto read_error = builder.CreateCall(array_read_word, { });
+
+            // Check for errors.
+            cmp = builder.CreateICmpNE(read_error, builder.getInt1(0));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+
+            // Get the address of the element in the raw array.
+            auto element_address = builder.CreateGEP(ffi_helper.type,
+                                                     raw_array,
+                                                     loaded_index);
+
+            // Call the element type to generate the pop.
+            const auto& element_type = collection.ffi_types[ffi_helper.array_ffi_info.element_type];
+            auto element_pop_result = element_type.pop_value(builder, runtime, element_address);
+
+            // Possibly check for errors.
+            if (pop_result != nullptr)
+            {
+                cmp = builder.CreateICmpNE(element_pop_result, builder.getInt1(0));
+                next_block = generate_block();
+                builder.CreateCondBr(cmp, error_block, next_block);
+                builder.SetInsertPoint(next_block);
+            }
+
+            // Increment the index.
+            auto new_index = builder.CreateAdd(loaded_index, builder.getInt64(1));
+            builder.CreateStore(new_index, loop_index);
+
+            // Jump to start of the loop.
+            builder.CreateBr(loop_block);
+        }
+
+
+        void generate_array_push_body(std::shared_ptr<llvm::Module>& module,
+                                      llvm::IRBuilder<>& builder,
+                                      const RuntimeApi& runtime,
+                                      WordCollection& collection,
+                                      const FfiArrayHelpers& ffi_helper)
+        {
+            // The function we're generating code for.
+            auto function = ffi_helper.push_handler;
+
+            auto generate_block = [&builder, function]()
+                {
+                    static size_t next_block_index = 0;
+                    std::string name = "block_" + std::to_string(next_block_index);
+
+                    auto block = llvm::BasicBlock::Create(builder.getContext(), name, function);
+                    ++next_block_index;
+
+                    return block;
+                };
+
+            auto bool_type = llvm::Type::getInt1Ty(builder.getContext());
+
+            // Create the entry block.
+            auto entry_block = llvm::BasicBlock::Create(builder.getContext(), "entry", function);
+
+            // Are we treating the array as a string?
+            if (ffi_helper.treat_as_string)
+            {
+                // We're treating as a string, so we don't need to do any error checking.
+                builder.SetInsertPoint(entry_block);
+
+                // Check if the array variable is a pointer to a pointer, if it is we need to
+                // dereference it.
+                llvm::Value* raw_array = function->getArg(0);
+
+                if (ffi_helper.is_pointer)
+                {
+                    // Dereference the pointer.
+                    //raw_array = builder.CreateLoad(ffi_helper.type, raw_array);
+                    //raw_array = builder.CreateGEP(ffi_helper.element_type.type,
+                    //                              raw_array,
+                    //                              builder.getInt64(0));
+                }
+
+                // Now call the run-time library to push the string.
+                builder.CreateCall(runtime.stack_push_string, { raw_array });
+
+                // Return success to the caller.
+                builder.CreateRet(builder.getInt1(0));
+
+                return;
+            }
+
+            // We are treating the array as a traditional array.
+
+            // Create the entry code.  Allocate an error flag variable and initialize it.
+            builder.SetInsertPoint(entry_block);
+            auto return_variable = builder.CreateAlloca(bool_type, nullptr, "return_variable");
+            builder.CreateStore(builder.getInt1(0), return_variable);
+
+            // We didn't need the exit and error blocks in the string case, but we'll be adding
+            // error checking for the array case, so create the blocks now.
+            auto exit_block = llvm::BasicBlock::Create(builder.getContext(), "exit", function);
+            auto error_block = llvm::BasicBlock::Create(builder.getContext(), "error", function);
+
+            // If the error block is reached, set the error flag and jump to the exit block.
+            builder.SetInsertPoint(error_block);
+            builder.CreateStore(builder.getInt1(1), return_variable);
+            builder.CreateBr(exit_block);
+
+            // Jump back to the entry block.
+            builder.SetInsertPoint(entry_block);
+
+            // Is the input variable a pointer, or a pointer to a pointer?  If it's a pointer to a
+            // pointer, we need to dereference it.
+            llvm::Value* raw_array = function->getArg(0);
+
+            if (ffi_helper.is_pointer)
+            {
+                // Dereference the pointer.
+                raw_array = builder.CreateLoad(ffi_helper.type, raw_array);
+            }
+
+            // We need to create a variable to hold the Forth array.  The size needs to be fixed at
+            // this point.  So we can create a Forth array of the correct size.
+            auto dest_array_variable = builder.CreateAlloca(runtime.value_struct_type,
+                                                            nullptr,
+                                                            "array_variable");
+            builder.CreateCall(runtime.initialize_variable, { dest_array_variable });
+
+            // Make sure this is a fixed sized array.
+            if (ffi_helper.array_ffi_info.size == -1)
+            {
+                throw_error("Internal error, array push handler " + ffi_helper.array_ffi_info.name +
+                            " is not fixed size.");
+            }
+
+            // Push the new array size onto the stack and call the runtime to create the array.
+            auto array_size = builder.getInt64(ffi_helper.array_ffi_info.size);
+            builder.CreateCall(runtime.stack_push_int, { array_size });
+
+            auto array_new_index = collection.word_map["[].new"];
+            auto array_new_word = collection.words[array_new_index].function;
+
+            auto create_result = builder.CreateCall(array_new_word, { });
+
+            // Pop the newly created array from the stack into our variable.
+            auto pop_result = builder.CreateCall(runtime.stack_pop, { dest_array_variable });
+            auto cmp = builder.CreateICmpNE(pop_result, builder.getInt1(0));
+            auto next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            // Create a loop to extract each element from the array.  Create a loop index and
+            // initialize it.
+            auto int64_type = llvm::Type::getInt64Ty(builder.getContext());
+            auto loop_index = builder.CreateAlloca(int64_type, nullptr, "loop_index");
+            builder.CreateStore(builder.getInt64(0), loop_index);
+
+            // Create the loop header block and generate the code to check the index against the
+            // array size.
+            auto loop_block = generate_block();
+            builder.CreateBr(loop_block);
+            builder.SetInsertPoint(loop_block);
+
+            auto loaded_index = builder.CreateLoad(int64_type, loop_index);
+            cmp = builder.CreateICmpSLT(loaded_index, array_size);
+            next_block = generate_block();
+
+            // If it is greater than or equal to the array size, we're done.
+            builder.CreateCondBr(cmp, next_block, exit_block);
+            builder.SetInsertPoint(next_block);
+
+            // Generate the code to translate and push element onto the stack.  First get the
+            // address of the current array element.
+            auto& element_type = collection.ffi_types[ffi_helper.array_ffi_info.element_type];
+            auto raw_element = builder.CreateGEP(ffi_helper.type, raw_array, loaded_index);
+            auto push_result = element_type.push_value(builder, runtime, raw_element);
+
+            // Optionally, do we need to do error checking?
+            if (push_result != nullptr)
+            {
+                cmp = builder.CreateICmpNE(push_result, builder.getInt1(0));
+                next_block = generate_block();
+                builder.CreateCondBr(cmp, error_block, next_block);
+                builder.SetInsertPoint(next_block);
+            }
+
+            // Push the element index onto the stack.
+            builder.CreateCall(runtime.stack_push_int, { loaded_index });
+
+            // Push the Forth array onto the stack.
+            builder.CreateCall(runtime.stack_push, { dest_array_variable });
+
+            // Call the array write word.
+            auto array_write_index = collection.word_map["[]!"];
+            auto array_write_word = collection.words[array_write_index].function;
+
+            auto write_result = builder.CreateCall(array_write_word, { });
+
+            // Check for errors.
+            cmp = builder.CreateICmpNE(write_result, builder.getInt1(0));
+            next_block = generate_block();
+            builder.CreateCondBr(cmp, error_block, next_block);
+            builder.SetInsertPoint(next_block);
+
+            // Increment the index.
+            auto new_index = builder.CreateAdd(loaded_index, builder.getInt64(1));
+            builder.CreateStore(new_index, loop_index);
+
+            // Jump to the start of the loop.
+            builder.CreateBr(loop_block);
+
+            // Generate the code for the exit block, free up the Forth array variable and return the
+            // error flag.
+            builder.SetInsertPoint(exit_block);
+            builder.CreateCall(runtime.free_variable, { dest_array_variable });
+            auto return_value = builder.CreateLoad(bool_type, return_variable);
+            builder.CreateRet(return_value);
+        }
+
+
+        void compile_array_push_pop_handlers(std::shared_ptr<llvm::Module>& module,
+                                             llvm::IRBuilder<>& builder,
+                                             const RuntimeApi& runtime,
+                                             WordCollection& collection)
+        {
+            for (const auto& ffi_helper : collection.ffi_array_helpers)
+            {
+                generate_array_pop_body(module,
+                                        builder,
+                                        runtime,
+                                        collection,
+                                        ffi_helper);
+
+                generate_array_push_body(module,
+                                         builder,
+                                         runtime,
+                                         collection,
+                                         ffi_helper);
             }
         }
 
@@ -3682,8 +4453,8 @@ namespace sorth::compilation
         create_structure_words(script, words);
 
         // Register the FFI structures with the ffi type-system.
-        register_ffi_structures(module, builder, words, standard_library);
-        register_ffi_structures(module, builder, words, script);
+        register_ffi_data_types(module, builder, words, standard_library);
+        register_ffi_data_types(module, builder, words, script);
 
         // Generate words for all the FFI functions from the runtime and the standard library.
         generate_ffi_words(standard_library, words, module);
@@ -3719,6 +4490,11 @@ namespace sorth::compilation
                                             builder,
                                             runtime_api,
                                             words);
+
+        compile_array_push_pop_handlers(module,
+                                        builder,
+                                        runtime_api,
+                                        words);
 
         // Create the script top-level function.  This function will be the entry point for the
         // resulting program.  It'll be made of of all the top level blocks in each of the scripts
@@ -3779,7 +4555,7 @@ namespace sorth::compilation
         module->setDataLayout(target_machine->createDataLayout());
 
         // Uncomment the following line to print the module to stdout for debugging.
-        module->print(llvm::outs(), nullptr);
+        //module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;

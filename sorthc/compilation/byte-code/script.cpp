@@ -10,14 +10,14 @@ namespace sorth::compilation::byte_code
     Script::Script(SubScriptList&& sub_scripts,
                    std::filesystem::path&& script_path,
                    ConstructionList&& words,
-                   StructureTypeList&& structure_types,
+                   DataTypeList&& data_types,
                    FfiFunctionList&& ffi_functions,
                    FfiVariableList&& ffi_variables,
                    ByteCode&& top_level) noexcept
     : sub_scripts(std::move(sub_scripts)),
       script_path(std::move(script_path)),
       words(std::move(words)),
-      structure_types(std::move(structure_types)),
+      data_types(std::move(data_types)),
       ffi_functions(std::move(ffi_functions)),
       ffi_variables(std::move(ffi_variables)),
       top_level(std::move(top_level)),
@@ -61,9 +61,9 @@ namespace sorth::compilation::byte_code
     }
 
 
-    const StructureTypeList& Script::get_structure_types() const noexcept
+    const DataTypeList& Script::get_data_types() const noexcept
     {
-        return structure_types;
+        return data_types;
     }
 
 

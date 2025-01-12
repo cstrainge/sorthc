@@ -12,7 +12,7 @@ namespace sorth::compilation::byte_code
       sub_scripts(),
       constructions(),
       words(),
-      structure_types(),
+      data_types(),
       ffi_functions(),
       ffi_variables(),
       insertion_point(CodeInsertionPoint::end),
@@ -55,7 +55,7 @@ namespace sorth::compilation::byte_code
 
     void Context::add_script_structure(const StructureType& structure)
     {
-        structure_types.push_back(structure);
+        data_types.push_back(structure);
     }
 
 
@@ -71,6 +71,12 @@ namespace sorth::compilation::byte_code
     }
 
 
+    void Context::add_ffi_array_type(const FfiArrayType& array_type)
+    {
+        data_types.push_back(array_type);
+    }
+
+
     const SubScriptList& Context::get_sub_scripts() const noexcept
     {
         return sub_scripts;
@@ -80,18 +86,6 @@ namespace sorth::compilation::byte_code
     SubScriptList&& Context::take_sub_scripts() noexcept
     {
         return std::move(sub_scripts);
-    }
-
-
-    const StructureTypeList& Context::get_structure_types() const noexcept
-    {
-        return structure_types;
-    }
-
-
-    StructureTypeList&& Context::take_structure_types() noexcept
-    {
-        return std::move(structure_types);
     }
 
 
@@ -116,6 +110,18 @@ namespace sorth::compilation::byte_code
     FfiVariableList&& Context::take_ffi_variables() noexcept
     {
         return std::move(ffi_variables);
+    }
+
+
+    const DataTypeList& Context::get_types() const noexcept
+    {
+        return data_types;
+    }
+
+
+    DataTypeList&& Context::take_types() noexcept
+    {
+        return std::move(data_types);
     }
 
 

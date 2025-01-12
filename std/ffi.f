@@ -224,8 +224,87 @@
 
 
 
+( Define an array type for the FFI. )
+: ffi.[] immediate
+    word variable! array-name
+    -1 variable! array-length
+
+    word variable! next
+
+    ( Check to see if we were given a size or not. )
+    next @ "->" <>
+    if
+        ( Looks like we were given a fixed length for the array type. )
+        next @ string.to-number array-length !
+
+        ( The next word now needs to be the -> keyword. )
+        word dup "->" <>
+        if
+            "Expected '->' but found " swap + "." + throw
+        then
+        drop
+
+        ( Get the next word for the type name. )
+        word next !
+    then
+
+    ( Read the type name. )
+    next @ variable! value-type-name
+
+    ( Check to see if we're treating the array as a string or not. )
+    word next !
+    false variable! treat-as-string
+
+    ( Check to see if we're treating the array as a string or not. )
+    next @ "as" =
+    if
+        ( We only support strings for now. )
+        word "ffi.string" <>
+        if
+            "Expected 'ffi.string' but found " next @ + "." + throw
+        then
+
+        ( Make sure that the underlying type of the array makes sense. )
+        value-type-name @ "ffi.u8" <>
+        if
+
+            "Expected the array " array-name @ +
+            " to be 'ffi.u8' but is " +
+            value-type-name @ +
+            "." +
+            throw
+        then
+
+        true treat-as-string !
+        word next !
+    then
+
+    ( Make sure that the definition ends with a semicolon. )
+    next @ ";" <>
+    if
+        "Expected a ';' but found " next @ + "." + throw
+    then
+
+    ( Pass the array type information to the compiler for registration. )
+
+    array-name @
+    array-length @
+    value-type-name @
+    treat-as-string @
+
+    ffi.register-array-type
+;
+
+
+
 : as immediate
     "as" sentinel_word
+;
+
+
+
+: align immediate
+    "align" sentinel_word
 ;
 
 
