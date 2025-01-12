@@ -39,6 +39,11 @@
 
 
 
+( Include POSIX definitions. )
+[include] std/posix.f
+
+
+
 ( Include some words for accessing the terminal. )
 [include] std/terminal.f
 
