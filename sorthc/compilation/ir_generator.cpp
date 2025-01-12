@@ -208,6 +208,9 @@ namespace sorth::compilation
             // How do we process this value, before and after the call?
             PassDirection direction = PassDirection::in;
 
+            // If overridden it's the alignment to use for the type.
+            ssize_t alignment = -1;
+
             // The raw LLVM type representation of the type.
             llvm::Type* type;
 
@@ -1697,6 +1700,8 @@ namespace sorth::compilation
             // Register the new type.
             FfiTypeInfo new_struct_info =
                 {
+                    .alignment = structure.get_ffi_info().value().alignment,
+
                     .type = struct_type,
 
                     .pop_value = [pop_function](llvm::IRBuilder<>& builder,
@@ -4064,6 +4069,11 @@ namespace sorth::compilation
                                                                nullptr,
                                                                "ffi_parameter");
 
+                if (ffi_parameter.type.alignment != -1)
+                {
+                    parameter_variable->setAlignment(llvm::Align(ffi_parameter.type.alignment));
+                }
+
                 parameter_variables.push_back(parameter_variable);
             }
 
@@ -4150,6 +4160,12 @@ namespace sorth::compilation
             auto return_value_variable = builder.CreateAlloca(word_ffi_info.return_type.type,
                                                               nullptr,
                                                               "ffi_return_variable");
+
+            if (word_ffi_info.return_type.alignment != -1)
+            {
+                return_value_variable->
+                                     setAlignment(llvm::Align(word_ffi_info.return_type.alignment));
+            }
 
             // Finally we can call the function.
             auto call_result = builder.CreateCall(word_ffi_info.function,
@@ -4555,7 +4571,7 @@ namespace sorth::compilation
         module->setDataLayout(target_machine->createDataLayout());
 
         // Uncomment the following line to print the module to stdout for debugging.
-        //module->print(llvm::outs(), nullptr);
+        module->print(llvm::outs(), nullptr);
 
         // Write the module to an object file while compiling it to native code.
         std::error_code error_code;

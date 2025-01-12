@@ -62,8 +62,8 @@
     ( Get the name of the new structure. )
     word variable! struct-name
 
-    ( The alignment of the structure. )
-    "8" variable! alignment
+    ( The alignment of the structure, assume that we're using the default for the platform. )
+    "-1" variable! alignment
 
     ( Create new arrays to hold the field names and their types for the new structure. )
     0 [].new variable! fields

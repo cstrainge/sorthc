@@ -840,7 +840,7 @@ namespace sorth::compilation::run_time::built_in_words
 
             byte_code::FfiInfo ffi_info;
 
-            ffi_info.alignment = std::stoul(alignment);
+            ffi_info.alignment = std::stol(alignment);
             ffi_info.field_types.reserve(field_types->size());
 
             for (size_t i = 0; i < field_types->size(); ++i)

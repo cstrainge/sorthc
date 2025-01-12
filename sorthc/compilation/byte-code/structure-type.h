@@ -13,7 +13,7 @@ namespace sorth::compilation::byte_code
 
     struct FfiInfo
     {
-        size_t alignment;
+        ssize_t alignment;
         std::vector<std::string> field_types;
     };
 
