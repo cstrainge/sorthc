@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+import subprocess
+import sys
+
+
+
+# The directory of this script
+script_directory = Path(__file__).parent
+
+
+# The files we will link the user code with.
+main_file = script_directory / "main.cpp"
+runtime_lib = script_directory / "libsorth-runtime.a"
+
+
+# Get the input and output files from the command line.
+args = sys.argv
+
+if len(args) != 3:
+    print("Usage: sorthc <user_object> <user_exe>")
+    sys.exit(1)
+
+user_object = args[1]
+user_exe = args[2]
+
+
+# Link the user code with the runtime library and generate an executable.
+result = subprocess.run([
+        "clang++",
+        main_file,
+        user_object,
+        runtime_lib,
+        "-o",
+        user_exe
+    ],
+    check = False)
+
+
+# Return the exit code of the compiler.
+sys.exit(result.returncode)

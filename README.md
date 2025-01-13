@@ -36,10 +36,8 @@ This will compile your Forth code into an object file.  To create an executable 
 the object against the run-time library:
 
 ```
-$ clang++ ./dist/main.cpp my-code.o ./dist/libsorth-runtime.a --std=c++20 -O3 -o my-code
+$ sorthl my-code.o my-code
 ```
 
 You will get an executable named `my-code` and it's only dependencies will be on the C++ and C
 run-time libraries.
-
-It is planed to build a linker tool, `sorthl` that will simplify this second step.

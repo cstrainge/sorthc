@@ -124,6 +124,13 @@ add_custom_target(copy_stdlib ALL
 
 
 
+# Custom target to copy the linker script.
+add_custom_target(copy_sorthl ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/sorthl ${DIST_DIR}/sorthl
+    COMMENT "Copying the sorthl linker script to the dist directory.")
+
+
+
 # Copy the custom main that compiled programs will use.
 add_custom_target(copy_abi_main ALL
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/abi/main.cpp ${DIST_DIR}/main.cpp
@@ -131,8 +138,10 @@ add_custom_target(copy_abi_main ALL
 
 
 
-# Make sure that the compiler target and the run-time depend on the copy_stdlib target.
+# Make sure that the compiler target and the run-time depend on the copy_stdlib and copy_sorthl
+# targets.
 add_dependencies(${PROJECT_NAME} copy_stdlib)
+add_dependencies(${PROJECT_NAME} copy_sorthl)
 add_dependencies(${SORTH_RUNTIME_NAME} copy_stdlib)
 
 
