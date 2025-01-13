@@ -9,11 +9,13 @@
         "doesnt",
         "fexceptions",
         "getelementptr",
+        "libsorth",
         "LLJIT",
         "nonnull",
         "noundef",
         "preds",
         "sorthc",
+        "sorthl",
         "Unqual",
         "zeroinitializer"
     ],
