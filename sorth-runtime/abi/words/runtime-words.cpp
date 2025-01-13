@@ -92,7 +92,7 @@ extern "C"
     {
         #ifdef __APPLE__
 
-            interpreter->push(std::string("macOS"));
+            stack_push_string("macOS");
 
         #elif __linux__
 
@@ -100,11 +100,11 @@ extern "C"
 
         #elif _WIN32 || _WIN64
 
-            interpreter->push(std::string("Windows"));
+            stack_push_string("Windows");
 
         #else
 
-            interpreter->push(std::string("Unknown"));
+            stack_push_string("Unknown");
 
         #endif
 
