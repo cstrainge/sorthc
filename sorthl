@@ -29,6 +29,7 @@ user_exe = args[2]
 # Link the user code with the runtime library and generate an executable.
 result = subprocess.run([
         "clang++",
+        "-std=c++20",
         main_file,
         user_object,
         runtime_lib,
