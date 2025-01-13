@@ -19,6 +19,18 @@ term.esc "[" + constant term.csi   ( Control sequence introducer. )
 
 
 
+( The following words are implemented in the run-time library. )
+
+( term.raw_mode )
+( term.size@ )
+( term.key )
+( term.flush )
+( term.readline )
+( term.! )
+( term.is_printable? )
+
+
+
 : term.fgc description: "Take a 256 colour number and turn it into a foreground escape sequence."
            signature: "colour_number -- escape_sequence"
     term.csi "38;5;" + swap + "m" +

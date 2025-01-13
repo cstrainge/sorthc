@@ -21,6 +21,7 @@
 #include <condition_variable>
 #include <memory>
 #include <cstring>
+#include <filesystem>
 
 #include "data-structures/value.h"
 #include "data-structures/structure.h"

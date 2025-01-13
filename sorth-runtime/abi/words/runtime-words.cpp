@@ -52,6 +52,76 @@ extern "C"
     }
 
 
+    int8_t word_user_env_read()
+    {
+        Value key_value;
+
+        auto pop_result = stack_pop(&key_value);
+
+        if (pop_result)
+        {
+            return 1;
+        }
+
+        if (!key_value.is_string())
+        {
+            set_last_error("Word user_env@ expected a string value for the environment "
+                           "variable key.");
+
+            return 1;
+        }
+
+        auto key = key_value.get_string();
+        const char* value = std::getenv(key.c_str());
+
+        if (value)
+        {
+            stack_push_string(value);
+        }
+        else
+        {
+            Value none;
+            stack_push(&none);
+        }
+
+        return 0;
+    }
+
+
+    int8_t word_user_os_read()
+    {
+        #ifdef __APPLE__
+
+            interpreter->push(std::string("macOS"));
+
+        #elif __linux__
+
+            stack_push_string("Linux");
+
+        #elif _WIN32 || _WIN64
+
+            interpreter->push(std::string("Windows"));
+
+        #else
+
+            interpreter->push(std::string("Unknown"));
+
+        #endif
+
+        return 0;
+    }
+
+
+    int8_t word_user_cwd()
+    {
+        auto cwd = std::filesystem::current_path();
+
+        stack_push_string(cwd.c_str());
+
+        return 0;
+    }
+
+
     int8_t word_throw()
     {
         Value message_value;
@@ -161,6 +231,11 @@ namespace sorth::run_time::abi::words
         registrar("thread.pop-from", "word_thread_pop_from");
         registrar("thread.push", "word_thread_push");
         registrar("thread.pop", "word_thread_pop");
+
+        registrar("user.env@", "word_user_env_read");
+        registrar("user.os", "word_user_os_read");
+        registrar("user.cwd", "word_user_cwd");
+
         registrar("throw", "word_throw");
         registrar("exit_success", "word_exit_success");
         registrar("exit_failure", "word_exit_failure");
