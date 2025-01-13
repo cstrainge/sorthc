@@ -3,6 +3,33 @@
 
 
 
+( The following words are implemented in the run-time library. )
+
+( + )
+( - )
+( * )
+( / )
+( % )
+
+( && )
+( || )
+( ' )
+
+( & )
+( | )
+( ^ )
+( ~ )
+( << )
+( >> )
+
+( = )
+( >= )
+( <= )
+( > )
+( < )
+
+
+
 ffi.fn acos as math.acos ffi.f64 -> ffi.f64
 
 

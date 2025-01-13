@@ -1,4 +1,19 @@
 
+( Words for working with structures. )
+
+
+
+( The following words are implemented in the run-time library. )
+
+( #.is-of-type? )
+( #@ )
+( #! )
+( #.iterate )
+( #.field-exists? )
+( #.= )
+
+
+
 ( The syntax handler for defining new structures... )
 ( Here we parse the incoming token stream and extract the structure name, field names and if )
 ( supplied the default value initialization code.  Once all this information is gathered, we pass )

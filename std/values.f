@@ -3,6 +3,22 @@
 
 
 
+( The following words are implemented in the run-time library. )
+
+( value.is-number? )
+( value.is-boolean? )
+( value.is-string? )
+( value.is-structure? )
+( value.is-array? )
+( value.is-buffer? )
+( value.is-hash-table? )
+( value.copy )
+( value.to-string )
+( hex )
+
+
+
+
 : value.both-are? description: "Check if the two values are the same type."
                   signature: "a b value-check -- are-same-type?"
     variable! operation

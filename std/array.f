@@ -1,4 +1,24 @@
 
+( Collection of words for working with arrays. )
+
+
+
+( The following words are implemented in the run-time library. )
+
+( [].new )
+( [].size@ )
+( []! )
+( []@ )
+( [].insert )
+( [].delete )
+( [].size! )
+( [].+ )
+( [].= )
+( [].push_front! )
+( [].push_back! )
+( [].pop_front! )
+( [].pop_back! )
+
 
 
 : []!! description: "Write a value at an index to the array variable."

@@ -2,6 +2,19 @@
 ( Some useful words when dealing with the terminal. )
 
 
+
+( The following words are implemented in the run-time library. )
+
+( term.raw_mode )
+( term.size@ )
+( term.key )
+( term.flush )
+( term.readline )
+( term.! )
+( term.is_printable? )
+
+
+
 "\027"         constant term.esc   ( Terminal escape character. )
 term.esc "[" + constant term.csi   ( Control sequence introducer. )
 
@@ -16,18 +29,6 @@ term.esc "[" + constant term.csi   ( Control sequence introducer. )
 "\067"  constant term.right_arrow  ( User hit the right arrow key. )
 "\068"  constant term.left_arrow   ( User hit the left arrow key. )
 "\0127" constant term.backspace    ( User hit the backspace key. )
-
-
-
-( The following words are implemented in the run-time library. )
-
-( term.raw_mode )
-( term.size@ )
-( term.key )
-( term.flush )
-( term.readline )
-( term.! )
-( term.is_printable? )
 
 
 

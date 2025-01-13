@@ -1,4 +1,21 @@
 
+( Words for working with strings. )
+
+
+
+( The following words are implemented in the run-time library. )
+
+( string.size@ )
+( string.[]! )
+( string.[]@ )
+( string.+ )
+( string.insert )
+( string.to_number )
+( string.find )
+( string.remove )
+
+
+
 : string.size@@ description: "Get the length of a string variable."
                 signature: "string_variable -- length"
     @ string.size@

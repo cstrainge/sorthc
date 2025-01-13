@@ -1,4 +1,20 @@
 
+( Collection of words for working with hash-tables. )
+
+
+( The following words are implemented in the run-time library. )
+
+( {}.new )
+( {}! )
+( {}@ )
+( {}? )
+( {}.+ )
+( {}.= )
+( {}.size@ )
+( {}.iterate )
+
+
+
 : {}!! description: "Insert a value into the hash table variable."
        signature: "value key hash_variable -- "
     @ {}!
@@ -30,12 +46,12 @@
     "->" "}" "}!" "}!!" "}@" "}@@" 6 code.compile_until_words
 
     case
-        "->"  of  true is_inline_syntax !                 endof
-        "}"   of  ( "Missing word -> and key value." throw )  endof
-        "}!"  of  "{}!"  command !                        endof
-        "}!!" of  "{}!!" command !                        endof
-        "}@"  of  "{}@"  command !                        endof
-        "}@@" of  "{}@@" command !                        endof
+        "->"  of  true is_inline_syntax !  endof
+        "}"   of                           endof
+        "}!"  of  "{}!"  command !         endof
+        "}!!" of  "{}!!" command !         endof
+        "}@"  of  "{}@"  command !         endof
+        "}@@" of  "{}@@" command !         endof
     endcase
 
     false is_inline_syntax @ =

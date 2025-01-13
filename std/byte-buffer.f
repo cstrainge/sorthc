@@ -3,6 +3,21 @@
 
 
 
+( The following words are implemented in the run-time library. )
+
+( buffer.new )
+( buffer.int! )
+( buffer.int@ )
+( buffer.float! )
+( buffer.float@ )
+( buffer.string! )
+( buffer.string@ )
+( buffer.size@ )
+( buffer.position! )
+( buffer.position@ )
+
+
+
 : buffer.i8!! description: "Write an 8-bit signed integer to the buffer variable."
               signature: "value buffer_variable -- "
     @ 1 buffer.int!
