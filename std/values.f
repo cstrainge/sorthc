@@ -18,7 +18,6 @@
 
 
 
-
 : value.both-are? description: "Check if the two values are the same type."
                   signature: "a b value-check -- are-same-type?"
     variable! operation
